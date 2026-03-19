@@ -112,7 +112,7 @@ trap cleanup INT TERM
 # ── Start services ────────────────────────────────────────────────────────────
 
 mkdir -p logs
-
+mkdir -p logs/nginx-tmp/{client_body,proxy,fastcgi,uwsgi,scgi}
 if $DEV_MODE; then
     LANGGRAPH_EXTRA_FLAGS=""
     GATEWAY_EXTRA_FLAGS="--reload --reload-include='*.yaml' --reload-include='.env'"
@@ -158,7 +158,7 @@ echo "Starting Frontend..."
 echo "✓ Frontend started on localhost:3000"
 
 echo "Starting Nginx reverse proxy..."
-nginx -g 'daemon off;' -c "$REPO_ROOT/docker/nginx/nginx.local.conf" -p "$REPO_ROOT" > logs/nginx.log 2>&1 &
+nginx -g "daemon off; error_log $REPO_ROOT/logs/nginx-error.log;" -c "$REPO_ROOT/docker/nginx/nginx.local.conf" -p "$REPO_ROOT" > logs/nginx.log 2>&1 &
 NGINX_PID=$!
 ./scripts/wait-for-port.sh 2026 10 "Nginx" || {
     echo "  See logs/nginx.log for details"

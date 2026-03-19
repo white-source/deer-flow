@@ -16,6 +16,8 @@ dependencies = [
     "python-telegram-bot>=21.0",
     "langgraph-sdk>=0.1.51",
     "markdown-to-mrkdwn>=0.3.1",
+    "langchain-community>=0.4.1",
+    "langchain-ollama>=1.0.1",
 ]
 
 [dependency-groups]
