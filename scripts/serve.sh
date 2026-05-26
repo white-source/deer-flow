@@ -359,8 +359,20 @@ run_service() {
 
 # ── Start services ───────────────────────────────────────────────────────────
 
-mkdir -p logs
-mkdir -p temp/client_body_temp temp/proxy_temp temp/fastcgi_temp temp/uwsgi_temp temp/scgi_temp
+_ensure_logs_dir() {
+    mkdir -p logs
+    mkdir -p temp/client_body_temp temp/proxy_temp temp/fastcgi_temp temp/uwsgi_temp temp/scgi_temp
+    if [ ! -w logs ] || { [ -d temp ] && [ ! -w temp ]; }; then
+        local owner
+        owner=$(stat -c '%U:%G' logs 2>/dev/null || echo 'unknown')
+        echo "✗ logs/ (or temp/) is not writable by $(id -un) (logs owner: $owner)."
+        echo "  This often happens after running make dev with sudo. Fix:"
+        echo "    sudo chown -R $(id -un):$(id -gn) logs temp"
+        exit 1
+    fi
+}
+
+_ensure_logs_dir
 
 # 1. Gateway API
 run_service "Gateway" \
