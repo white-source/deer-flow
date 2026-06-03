@@ -1,0 +1,9 @@
+# DeerFlow overlay: NEXTAUTH_URL only (host port 3100 is patched in docker-compose.upstream.yml).
+services:
+  langfuse-web:
+    environment:
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3100}
+
+  langfuse-worker:
+    environment:
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3100}

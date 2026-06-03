@@ -1,6 +1,6 @@
 # DeerFlow - Unified Development Environment
 
-.PHONY: help config config-upgrade check install setup doctor detect-thread-boundaries dev dev-daemon start start-daemon stop up down clean docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway
+.PHONY: help config config-upgrade check install setup doctor detect-thread-boundaries dev dev-daemon start start-daemon stop langfuse-up langfuse-down up down clean docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway
 
 BASH ?= bash
 BACKEND_UV_RUN = cd backend && uv run
@@ -31,6 +31,8 @@ help:
 	@echo "  make start           - Start all services in production mode (optimized, no hot-reloading)"
 	@echo "  make start-daemon    - Start prod services in background (daemon mode)"
 	@echo "  make stop            - Stop all running services"
+	@echo "  make langfuse-up     - Start self-hosted Langfuse (UI http://localhost:3100)"
+	@echo "  make langfuse-down   - Stop self-hosted Langfuse"
 	@echo "  make clean           - Clean up processes and temporary files"
 	@echo ""
 	@echo "Docker Production Commands:"
@@ -139,6 +141,12 @@ start-daemon:
 # Stop all services
 stop:
 	@$(RUN_WITH_GIT_BASH) ./scripts/serve.sh --stop
+
+langfuse-up:
+	@$(RUN_WITH_GIT_BASH) ./scripts/langfuse.sh up
+
+langfuse-down:
+	@$(RUN_WITH_GIT_BASH) ./scripts/langfuse.sh down
 
 # Clean up
 clean: stop

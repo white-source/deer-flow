@@ -1,0 +1,4453 @@
+openapi: 3.1.0
+info:
+  title: DeerFlow API
+  description: 'DeerFlow — LangGraph-based AI Super Agent System.
+
+
+    Backend Gateway API providing:
+
+    - **Agent Execution** — stream / wait / cancel runs on threads
+
+    - **Thread Management** — CRUD, state, history, messages, token tracking
+
+    - **Memory** — persistent cross-conversation facts and context
+
+    - **Skills** — install, enable, disable, and manage agent skills
+
+    - **MCP** — Model Context Protocol server configuration
+
+    - **File Uploads** — with automatic PDF/Word/PPT/Excel conversion
+
+    - **Artifacts** — agent-generated file serving
+
+    - **IM Channels** — Feishu, Slack, Telegram, DingTalk integration
+
+    - **Custom Agents** — create and manage user-defined agents'
+  version: 0.1.0
+paths:
+  /api/models:
+    get:
+      tags:
+      - Models
+      summary: List All Models
+      description: Retrieve a list of all available AI models configured in the system.
+      operationId: list_models_api_models_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelsListResponse'
+  /api/models/{model_name}:
+    get:
+      tags:
+      - Models
+      summary: Get Model Details
+      description: Retrieve detailed information about a specific AI model by its name.
+      operationId: get_model_api_models__model_name__get
+      parameters:
+      - name: model_name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Model Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/mcp/config:
+    get:
+      tags:
+      - MCP
+      summary: Get MCP Configuration
+      description: Retrieve the current Model Context Protocol (MCP) server configurations.
+      operationId: get_mcp_configuration_api_mcp_config_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpConfigResponse'
+    put:
+      tags:
+      - MCP
+      summary: Update MCP Configuration
+      description: Update Model Context Protocol (MCP) server configurations and save to file.
+      operationId: update_mcp_configuration_api_mcp_config_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpConfigUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpConfigResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/memory:
+    get:
+      tags:
+      - Memory
+      summary: Get Memory Data
+      description: Retrieve the current global memory data including user context, history, and facts.
+      operationId: get_memory_api_memory_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+    delete:
+      tags:
+      - Memory
+      summary: Clear All Memory Data
+      description: Delete all saved memory data and reset the memory structure to an empty state.
+      operationId: clear_memory_api_memory_delete
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+  /api/memory/reload:
+    post:
+      tags:
+      - Memory
+      summary: Reload Memory Data
+      description: Reload memory data from the storage file, refreshing the in-memory cache.
+      operationId: reload_memory_api_memory_reload_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+  /api/memory/facts:
+    post:
+      tags:
+      - Memory
+      summary: Create Memory Fact
+      description: Create a single saved memory fact manually.
+      operationId: create_memory_fact_endpoint_api_memory_facts_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactCreateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/memory/facts/{fact_id}:
+    delete:
+      tags:
+      - Memory
+      summary: Delete Memory Fact
+      description: Delete a single saved memory fact by its fact id.
+      operationId: delete_memory_fact_endpoint_api_memory_facts__fact_id__delete
+      parameters:
+      - name: fact_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Fact Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - Memory
+      summary: Patch Memory Fact
+      description: Partially update a single saved memory fact by its fact id while preserving omitted fields.
+      operationId: update_memory_fact_endpoint_api_memory_facts__fact_id__patch
+      parameters:
+      - name: fact_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Fact Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactPatchRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/memory/export:
+    get:
+      tags:
+      - Memory
+      summary: Export Memory Data
+      description: Export the current global memory data as JSON for backup or transfer.
+      operationId: export_memory_api_memory_export_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+  /api/memory/import:
+    post:
+      tags:
+      - Memory
+      summary: Import Memory Data
+      description: Import and overwrite the current global memory data from a JSON payload.
+      operationId: import_memory_api_memory_import_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryResponse'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/memory/config:
+    get:
+      tags:
+      - Memory
+      summary: Get Memory Configuration
+      description: Retrieve the current memory system configuration.
+      operationId: get_memory_config_endpoint_api_memory_config_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryConfigResponse'
+  /api/memory/status:
+    get:
+      tags:
+      - Memory
+      summary: Get Memory Status
+      description: Retrieve both memory configuration and current data in a single request.
+      operationId: get_memory_status_api_memory_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryStatusResponse'
+  /api/skills:
+    get:
+      tags:
+      - Skills
+      summary: List All Skills
+      description: Retrieve a list of all available skills from both public and custom directories.
+      operationId: list_skills_api_skills_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillsListResponse'
+  /api/skills/install:
+    post:
+      tags:
+      - Skills
+      summary: Install Skill
+      description: Install a skill from a .skill file (ZIP archive) located in the thread's user-data directory.
+      operationId: install_skill_api_skills_install_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillInstallRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillInstallResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/skills/custom:
+    get:
+      tags:
+      - Skills
+      summary: List Custom Skills
+      operationId: list_custom_skills_api_skills_custom_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillsListResponse'
+  /api/skills/custom/{skill_name}:
+    get:
+      tags:
+      - Skills
+      summary: Get Custom Skill Content
+      operationId: get_custom_skill_api_skills_custom__skill_name__get
+      parameters:
+      - name: skill_name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSkillContentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Skills
+      summary: Edit Custom Skill
+      operationId: update_custom_skill_api_skills_custom__skill_name__put
+      parameters:
+      - name: skill_name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomSkillUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSkillContentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Skills
+      summary: Delete Custom Skill
+      operationId: delete_custom_skill_api_skills_custom__skill_name__delete
+      parameters:
+      - name: skill_name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: boolean
+                title: Response Delete Custom Skill Api Skills Custom  Skill Name  Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/skills/custom/{skill_name}/history:
+    get:
+      tags:
+      - Skills
+      summary: Get Custom Skill History
+      operationId: get_custom_skill_history_api_skills_custom__skill_name__history_get
+      parameters:
+      - name: skill_name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSkillHistoryResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/skills/custom/{skill_name}/rollback:
+    post:
+      tags:
+      - Skills
+      summary: Rollback Custom Skill
+      operationId: rollback_custom_skill_api_skills_custom__skill_name__rollback_post
+      parameters:
+      - name: skill_name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillRollbackRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSkillContentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/skills/{skill_name}:
+    get:
+      tags:
+      - Skills
+      summary: Get Skill Details
+      description: Retrieve detailed information about a specific skill by its name.
+      operationId: get_skill_api_skills__skill_name__get
+      parameters:
+      - name: skill_name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Skills
+      summary: Update Skill
+      description: Update a skill's enabled status by modifying the extensions_config.json file.
+      operationId: update_skill_api_skills__skill_name__put
+      parameters:
+      - name: skill_name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Skill Name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SkillUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/artifacts/{path}:
+    get:
+      tags:
+      - Artifacts
+      summary: Get Artifact File
+      description: Retrieve an artifact file generated by the AI agent. Text and binary files can be viewed inline, while
+        active web content is always downloaded.
+      operationId: get_artifact_api_threads__thread_id__artifacts__path__get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: path
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Path
+      - name: download
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Download
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/uploads:
+    post:
+      tags:
+      - Uploads
+      summary: Upload Files
+      description: Upload multiple files to a thread's uploads directory.
+      operationId: upload_files_api_threads__thread_id__uploads_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_files_api_threads__thread_id__uploads_post'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/uploads/limits:
+    get:
+      tags:
+      - Uploads
+      summary: Get Upload Limits
+      description: Return upload limits used by the gateway for this thread.
+      operationId: get_upload_limits_api_threads__thread_id__uploads_limits_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadLimits'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/uploads/list:
+    get:
+      tags:
+      - Uploads
+      summary: List Uploaded Files
+      description: List all files in a thread's uploads directory.
+      operationId: list_uploaded_files_api_threads__thread_id__uploads_list_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Uploaded Files Api Threads  Thread Id  Uploads List Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/uploads/{filename}:
+    delete:
+      tags:
+      - Uploads
+      summary: Delete Uploaded File
+      description: Delete a file from a thread's uploads directory.
+      operationId: delete_uploaded_file_api_threads__thread_id__uploads__filename__delete
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: filename
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Filename
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Delete Uploaded File Api Threads  Thread Id  Uploads  Filename  Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}:
+    delete:
+      tags:
+      - Threads
+      summary: Delete Thread Data
+      description: 'Delete local persisted filesystem data for a thread.
+
+
+        Cleans DeerFlow-managed thread directories, removes checkpoint data,
+
+        and removes the thread_meta row from the configured ThreadMetaStore
+
+        (sqlite or memory).'
+      operationId: delete_thread_data_api_threads__thread_id__delete
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadDeleteResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - Threads
+      summary: Patch Thread
+      description: Merge metadata into a thread record.
+      operationId: patch_thread_api_threads__thread_id__patch
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreadPatchRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Threads
+      summary: Get Thread
+      description: 'Get thread info.
+
+
+        Reads metadata from the ThreadMetaStore and derives the accurate
+
+        execution status from the checkpointer.  Falls back to the checkpointer
+
+        alone for threads that pre-date ThreadMetaStore adoption (backward compat).'
+      operationId: get_thread_api_threads__thread_id__get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads:
+    post:
+      tags:
+      - Threads
+      summary: Create Thread
+      description: 'Create a new thread.
+
+
+        Writes a thread_meta record (so the thread appears in /threads/search)
+
+        and an empty checkpoint (so state endpoints work immediately).
+
+        Idempotent: returns the existing record when ``thread_id`` already exists.'
+      operationId: create_thread_api_threads_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreadCreateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/search:
+    post:
+      tags:
+      - Threads
+      summary: Search Threads
+      description: 'Search and list threads.
+
+
+        Delegates to the configured ThreadMetaStore implementation
+
+        (SQL-backed for sqlite/postgres, Store-backed for memory mode).'
+      operationId: search_threads_api_threads_search_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreadSearchRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ThreadResponse'
+                type: array
+                title: Response Search Threads Api Threads Search Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/state:
+    get:
+      tags:
+      - Threads
+      summary: Get Thread State
+      description: 'Get the latest state snapshot for a thread.
+
+
+        Channel values are serialized to ensure LangChain message objects
+
+        are converted to JSON-safe dicts.'
+      operationId: get_thread_state_api_threads__thread_id__state_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadStateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Threads
+      summary: Update Thread State
+      description: 'Update thread state (e.g. for human-in-the-loop resume or title rename).
+
+
+        Writes a new checkpoint that merges *body.values* into the latest
+
+        channel values, then syncs any updated ``title`` field through the
+
+        ThreadMetaStore abstraction so that ``/threads/search`` reflects the
+
+        change immediately in both sqlite and memory backends.'
+      operationId: update_thread_state_api_threads__thread_id__state_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreadStateUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadStateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/history:
+    post:
+      tags:
+      - Threads
+      summary: Get Thread History
+      description: 'Get checkpoint history for a thread.
+
+
+        Messages are read from the checkpointer''s channel values (the
+
+        authoritative source) and serialized via
+
+        :func:`~deerflow.runtime.serialization.serialize_channel_values`.
+
+        Only the latest (first) checkpoint carries the ``messages`` key to
+
+        avoid duplicating them across every entry.'
+      operationId: get_thread_history_api_threads__thread_id__history_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreadHistoryRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HistoryEntry'
+                title: Response Get Thread History Api Threads  Thread Id  History Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/agents:
+    get:
+      tags:
+      - Agents
+      summary: List Custom Agents
+      description: List all custom agents available in the agents directory, including their soul content.
+      operationId: list_agents_api_agents_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentsListResponse'
+    post:
+      tags:
+      - Agents
+      summary: Create Custom Agent
+      description: Create a new custom agent with its config and SOUL.md.
+      operationId: create_agent_endpoint_api_agents_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreateRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/agents/check:
+    get:
+      tags:
+      - Agents
+      summary: Check Agent Name
+      description: Validate an agent name and check if it is available (case-insensitive).
+      operationId: check_agent_name_api_agents_check_get
+      parameters:
+      - name: name
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Check Agent Name Api Agents Check Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/agents/{name}:
+    get:
+      tags:
+      - Agents
+      summary: Get Custom Agent
+      description: Retrieve details and SOUL.md content for a specific custom agent.
+      operationId: get_agent_api_agents__name__get
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - Agents
+      summary: Update Custom Agent
+      description: Update an existing custom agent's config and/or SOUL.md.
+      operationId: update_agent_api_agents__name__put
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Agents
+      summary: Delete Custom Agent
+      description: Delete a custom agent and all its files (config, SOUL.md, memory).
+      operationId: delete_agent_api_agents__name__delete
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/user-profile:
+    get:
+      tags:
+      - Agents
+      summary: Get User Profile
+      description: Read the global USER.md file that is injected into all custom agents.
+      operationId: get_user_profile_api_user_profile_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+    put:
+      tags:
+      - Agents
+      summary: Update User Profile
+      description: Write the global USER.md file that is injected into all custom agents.
+      operationId: update_user_profile_api_user_profile_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfileUpdateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/suggestions:
+    post:
+      tags:
+      - Suggestions
+      summary: Generate Follow-up Questions
+      description: Generate short follow-up questions a user might ask next, based on recent conversation context.
+      operationId: generate_suggestions_api_threads__thread_id__suggestions_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestionsRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/channels/:
+    get:
+      tags:
+      - Channels
+      summary: Get Channels Status
+      description: Get the status of all IM channels.
+      operationId: get_channels_status_api_channels__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelStatusResponse'
+  /api/channels/{name}/restart:
+    post:
+      tags:
+      - Channels
+      summary: Restart Channel
+      description: Restart a specific IM channel.
+      operationId: restart_channel_api_channels__name__restart_post
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Name
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelRestartResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/assistants/search:
+    post:
+      tags:
+      - Assistants
+      summary: Search Assistants
+      description: 'Search assistants.
+
+
+        Returns all registered assistants (lead_agent + custom agents from config).'
+      operationId: search_assistants_api_assistants_search_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/AssistantSearchRequest'
+              - type: 'null'
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/AssistantResponse'
+                type: array
+                title: Response Search Assistants Api Assistants Search Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/assistants/{assistant_id}:
+    get:
+      tags:
+      - Assistants
+      summary: Get Assistant Compat
+      description: Get an assistant by ID.
+      operationId: get_assistant_compat_api_assistants__assistant_id__get
+      parameters:
+      - name: assistant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assistant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/assistants/{assistant_id}/graph:
+    get:
+      tags:
+      - Assistants
+      summary: Get Assistant Graph
+      description: 'Get the graph structure for an assistant.
+
+
+        Returns a minimal graph description. Full graph introspection is
+
+        not supported in the Gateway — this stub satisfies SDK validation.'
+      operationId: get_assistant_graph_api_assistants__assistant_id__graph_get
+      parameters:
+      - name: assistant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assistant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Assistant Graph Api Assistants  Assistant Id  Graph Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/assistants/{assistant_id}/schemas:
+    get:
+      tags:
+      - Assistants
+      summary: Get Assistant Schemas
+      description: 'Get JSON schemas for an assistant''s input/output/state.
+
+
+        Returns empty schemas — full introspection not supported in Gateway.'
+      operationId: get_assistant_schemas_api_assistants__assistant_id__schemas_get
+      parameters:
+      - name: assistant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Assistant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Assistant Schemas Api Assistants  Assistant Id  Schemas Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/login/local:
+    post:
+      tags:
+      - Auth
+      summary: Login Local
+      description: Local email/password login.
+      operationId: login_local_api_v1_auth_login_local_post
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Body_login_local_api_v1_auth_login_local_post'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/register:
+    post:
+      tags:
+      - Auth
+      summary: Register
+      description: 'Register a new user account (always ''user'' role).
+
+
+        The first admin is created explicitly through /initialize. This endpoint creates regular users.
+
+        Auto-login by setting the session cookie.'
+      operationId: register_api_v1_auth_register_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - Auth
+      summary: Logout
+      description: Logout current user by clearing the cookie.
+      operationId: logout_api_v1_auth_logout_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+  /api/v1/auth/change-password:
+    post:
+      tags:
+      - Auth
+      summary: Change Password
+      description: 'Change password for the currently authenticated user.
+
+
+        Also handles the first-boot setup flow:
+
+        - If new_email is provided, updates email (checks uniqueness)
+
+        - If user.needs_setup is True and new_email is given, clears needs_setup
+
+        - Always increments token_version to invalidate old sessions
+
+        - Re-issues session cookie with new token_version'
+      operationId: change_password_api_v1_auth_change_password_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/me:
+    get:
+      tags:
+      - Auth
+      summary: Get Me
+      description: Get current authenticated user info.
+      operationId: get_me_api_v1_auth_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+  /api/v1/auth/setup-status:
+    get:
+      tags:
+      - Auth
+      summary: Setup Status
+      description: Check if an admin account exists. Returns needs_setup=True when no admin exists.
+      operationId: setup_status_api_v1_auth_setup_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/auth/initialize:
+    post:
+      tags:
+      - Auth
+      summary: Initialize Admin
+      description: 'Create the first admin account on initial system setup.
+
+
+        Only callable when no admin exists. Returns 409 Conflict if an admin
+
+        already exists.
+
+
+        On success, the admin account is created with ``needs_setup=False`` and
+
+        the session cookie is set.'
+      operationId: initialize_admin_api_v1_auth_initialize_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitializeAdminRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/oauth/{provider}:
+    get:
+      tags:
+      - Auth
+      summary: Oauth Login
+      description: 'Initiate OAuth login flow.
+
+
+        Redirects to the OAuth provider''s authorization URL.
+
+        Currently a placeholder - requires OAuth provider implementation.'
+      operationId: oauth_login_api_v1_auth_oauth__provider__get
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Provider
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/callback/{provider}:
+    get:
+      tags:
+      - Auth
+      summary: Oauth Callback
+      description: 'OAuth callback endpoint.
+
+
+        Handles the OAuth provider''s callback after user authorization.
+
+        Currently a placeholder.'
+      operationId: oauth_callback_api_v1_auth_callback__provider__get
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Provider
+      - name: code
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Code
+      - name: state
+        in: query
+        required: true
+        schema:
+          type: string
+          title: State
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/{run_id}/feedback:
+    put:
+      tags:
+      - Feedback
+      summary: Upsert Feedback
+      description: Create or update feedback for a run (idempotent).
+      operationId: upsert_feedback_api_threads__thread_id__runs__run_id__feedback_put
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackUpsertRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Feedback
+      summary: Delete Run Feedback
+      description: Delete the current user's feedback for a run.
+      operationId: delete_run_feedback_api_threads__thread_id__runs__run_id__feedback_delete
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: boolean
+                title: Response Delete Run Feedback Api Threads  Thread Id  Runs  Run Id  Feedback Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Feedback
+      summary: Create Feedback
+      description: Submit feedback (thumbs-up/down) for a run.
+      operationId: create_feedback_api_threads__thread_id__runs__run_id__feedback_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Feedback
+      summary: List Feedback
+      description: List all feedback for a run.
+      operationId: list_feedback_api_threads__thread_id__runs__run_id__feedback_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeedbackResponse'
+                title: Response List Feedback Api Threads  Thread Id  Runs  Run Id  Feedback Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/{run_id}/feedback/stats:
+    get:
+      tags:
+      - Feedback
+      summary: Feedback Stats
+      description: Get aggregated feedback stats (positive/negative counts) for a run.
+      operationId: feedback_stats_api_threads__thread_id__runs__run_id__feedback_stats_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackStatsResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/{run_id}/feedback/{feedback_id}:
+    delete:
+      tags:
+      - Feedback
+      summary: Delete Feedback
+      description: Delete a feedback record.
+      operationId: delete_feedback_api_threads__thread_id__runs__run_id__feedback__feedback_id__delete
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      - name: feedback_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Feedback Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: boolean
+                title: Response Delete Feedback Api Threads  Thread Id  Runs  Run Id  Feedback  Feedback Id  Delete
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs:
+    post:
+      tags:
+      - Thread Runs
+      summary: Create Run
+      description: Create a background run (returns immediately).
+      operationId: create_run_api_threads__thread_id__runs_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Thread Runs
+      summary: List Runs
+      description: List all runs for a thread.
+      operationId: list_runs_api_threads__thread_id__runs_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RunResponse'
+                title: Response List Runs Api Threads  Thread Id  Runs Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/stream:
+    post:
+      tags:
+      - Thread Runs
+      summary: Stream Run
+      description: 'Create a run and stream events via SSE.
+
+
+        The response includes a ``Content-Location`` header with the run''s
+
+        resource URL, matching the LangGraph Platform protocol.  The
+
+        ``useStream`` React hook uses this to extract run metadata.'
+      operationId: stream_run_api_threads__thread_id__runs_stream_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/wait:
+    post:
+      tags:
+      - Thread Runs
+      summary: Wait Run
+      description: Create a run and block until it completes, returning the final state.
+      operationId: wait_run_api_threads__thread_id__runs_wait_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Wait Run Api Threads  Thread Id  Runs Wait Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/{run_id}:
+    get:
+      tags:
+      - Thread Runs
+      summary: Get Run
+      description: Get details of a specific run.
+      operationId: get_run_api_threads__thread_id__runs__run_id__get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/{run_id}/cancel:
+    post:
+      tags:
+      - Thread Runs
+      summary: Cancel Run
+      description: 'Cancel a running or pending run.
+
+
+        - action=interrupt: Stop execution, keep current checkpoint (can be resumed)
+
+        - action=rollback: Stop execution, revert to pre-run checkpoint state
+
+        - wait=true: Block until the run fully stops, return 204
+
+        - wait=false: Return immediately with 202'
+      operationId: cancel_run_api_threads__thread_id__runs__run_id__cancel_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      - name: wait
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Block until run completes after cancel
+          default: false
+          title: Wait
+        description: Block until run completes after cancel
+      - name: action
+        in: query
+        required: false
+        schema:
+          enum:
+          - interrupt
+          - rollback
+          type: string
+          description: Cancel action
+          default: interrupt
+          title: Action
+        description: Cancel action
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/{run_id}/join:
+    get:
+      tags:
+      - Thread Runs
+      summary: Join Run
+      description: Join an existing run's SSE stream.
+      operationId: join_run_api_threads__thread_id__runs__run_id__join_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/{run_id}/stream:
+    post:
+      tags:
+      - Thread Runs
+      summary: Stream Existing Run
+      description: 'Join an existing run''s SSE stream (GET), or cancel-then-stream (POST).
+
+
+        The LangGraph SDK''s ``joinStream`` and ``useStream`` stop button both use
+
+        ``POST`` to this endpoint.  When ``action=interrupt`` or ``action=rollback``
+
+        is present the run is cancelled first; the response then streams any
+
+        remaining buffered events so the client observes a clean shutdown.'
+      operationId: stream_existing_run_api_threads__thread_id__runs__run_id__stream_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      - name: action
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - interrupt
+            - rollback
+            type: string
+          - type: 'null'
+          description: Cancel action
+          title: Action
+        description: Cancel action
+      - name: wait
+        in: query
+        required: false
+        schema:
+          type: integer
+          description: Block until cancelled (1) or return immediately (0)
+          default: 0
+          title: Wait
+        description: Block until cancelled (1) or return immediately (0)
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - Thread Runs
+      summary: Stream Existing Run
+      description: 'Join an existing run''s SSE stream (GET), or cancel-then-stream (POST).
+
+
+        The LangGraph SDK''s ``joinStream`` and ``useStream`` stop button both use
+
+        ``POST`` to this endpoint.  When ``action=interrupt`` or ``action=rollback``
+
+        is present the run is cancelled first; the response then streams any
+
+        remaining buffered events so the client observes a clean shutdown.'
+      operationId: stream_existing_run_api_threads__thread_id__runs__run_id__stream_post
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      - name: action
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - interrupt
+            - rollback
+            type: string
+          - type: 'null'
+          description: Cancel action
+          title: Action
+        description: Cancel action
+      - name: wait
+        in: query
+        required: false
+        schema:
+          type: integer
+          description: Block until cancelled (1) or return immediately (0)
+          default: 0
+          title: Wait
+        description: Block until cancelled (1) or return immediately (0)
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/messages:
+    get:
+      tags:
+      - Threads
+      summary: List Thread Messages
+      description: Return displayable messages for a thread (across all runs), with feedback attached.
+      operationId: list_thread_messages_api_threads__thread_id__messages_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          default: 50
+          title: Limit
+      - name: before_seq
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Before Seq
+      - name: after_seq
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: After Seq
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response List Thread Messages Api Threads  Thread Id  Messages Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/{run_id}/messages:
+    get:
+      tags:
+      - Thread Runs
+      summary: List Run Messages
+      description: 'Return paginated messages for a specific run.
+
+
+        Response: { data: [...], has_more: bool }'
+      operationId: list_run_messages_api_threads__thread_id__runs__run_id__messages_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: before_seq
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Before Seq
+      - name: after_seq
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: After Seq
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Run Messages Api Threads  Thread Id  Runs  Run Id  Messages Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/runs/{run_id}/events:
+    get:
+      tags:
+      - Thread Runs
+      summary: List Run Events
+      description: Return the full event stream for a run (debug/audit).
+      operationId: list_run_events_api_threads__thread_id__runs__run_id__events_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      - name: event_types
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Event Types
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 2000
+          default: 500
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response List Run Events Api Threads  Thread Id  Runs  Run Id  Events Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/threads/{thread_id}/token-usage:
+    get:
+      tags:
+      - Threads
+      summary: Thread Token Usage
+      description: Thread-level token usage aggregation.
+      operationId: thread_token_usage_api_threads__thread_id__token_usage_get
+      parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Thread Id
+      - name: include_active
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Include running run progress snapshots
+          default: false
+          title: Include Active
+        description: Include running run progress snapshots
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadTokenUsageResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/runs/stream:
+    post:
+      tags:
+      - Runs
+      summary: Stateless Stream
+      description: 'Create a run and stream events via SSE.
+
+
+        If ``config.configurable.thread_id`` is provided, the run is created
+
+        on the given thread so that conversation history is preserved.
+
+        Otherwise a new temporary thread is created.'
+      operationId: stateless_stream_api_runs_stream_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunCreateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/runs/wait:
+    post:
+      tags:
+      - Runs
+      summary: Stateless Wait
+      description: 'Create a run and block until completion.
+
+
+        If ``config.configurable.thread_id`` is provided, the run is created
+
+        on the given thread so that conversation history is preserved.
+
+        Otherwise a new temporary thread is created.'
+      operationId: stateless_wait_api_runs_wait_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunCreateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Stateless Wait Api Runs Wait Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/runs/{run_id}/messages:
+    get:
+      tags:
+      - Runs
+      summary: Run Messages
+      description: 'Return paginated messages for a run (cursor-based).
+
+
+        Pagination:
+
+        - after_seq: messages with seq > after_seq (forward)
+
+        - before_seq: messages with seq < before_seq (backward)
+
+        - neither: latest messages
+
+
+        Response: { data: [...], has_more: bool }'
+      operationId: run_messages_api_runs__run_id__messages_get
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: before_seq
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Before Seq
+      - name: after_seq
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: After Seq
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Run Messages Api Runs  Run Id  Messages Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/runs/{run_id}/feedback:
+    get:
+      tags:
+      - Runs
+      summary: Run Feedback
+      description: Return all feedback for a run.
+      operationId: run_feedback_api_runs__run_id__feedback_get
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+                title: Response Run Feedback Api Runs  Run Id  Feedback Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /health:
+    get:
+      tags:
+      - Health
+      summary: Health Check
+      description: "Health check endpoint.\n\nReturns:\n    Service health status information."
+      operationId: health_check_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Health Check Health Get
+components:
+  schemas:
+    AgentCreateRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Agent name (must match ^[A-Za-z0-9-]+$, stored as lowercase)
+        description:
+          type: string
+          title: Description
+          description: Agent description
+          default: ''
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+          description: Optional model override
+        tool_groups:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tool Groups
+          description: Optional tool group whitelist
+        skills:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Skills
+          description: Optional skill whitelist (None=all enabled, []=none)
+        soul:
+          type: string
+          title: Soul
+          description: SOUL.md content — agent personality and behavioral guardrails
+          default: ''
+      type: object
+      required:
+      - name
+      title: AgentCreateRequest
+      description: Request body for creating a custom agent.
+    AgentResponse:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Agent name (hyphen-case)
+        description:
+          type: string
+          title: Description
+          description: Agent description
+          default: ''
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+          description: Optional model override
+        tool_groups:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tool Groups
+          description: Optional tool group whitelist
+        skills:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Skills
+          description: Optional skill whitelist (None=all, []=none)
+        soul:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Soul
+          description: SOUL.md content
+      type: object
+      required:
+      - name
+      title: AgentResponse
+      description: Response model for a custom agent.
+    AgentUpdateRequest:
+      properties:
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: Updated description
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+          description: Updated model override
+        tool_groups:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Tool Groups
+          description: Updated tool group whitelist
+        skills:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Skills
+          description: Updated skill whitelist (None=all, []=none)
+        soul:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Soul
+          description: Updated SOUL.md content
+      type: object
+      title: AgentUpdateRequest
+      description: Request body for updating a custom agent.
+    AgentsListResponse:
+      properties:
+        agents:
+          items:
+            $ref: '#/components/schemas/AgentResponse'
+          type: array
+          title: Agents
+      type: object
+      required:
+      - agents
+      title: AgentsListResponse
+      description: Response model for listing all custom agents.
+    AssistantResponse:
+      properties:
+        assistant_id:
+          type: string
+          title: Assistant Id
+        graph_id:
+          type: string
+          title: Graph Id
+        name:
+          type: string
+          title: Name
+        config:
+          additionalProperties: true
+          type: object
+          title: Config
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        created_at:
+          type: string
+          title: Created At
+          default: ''
+        updated_at:
+          type: string
+          title: Updated At
+          default: ''
+        version:
+          type: integer
+          title: Version
+          default: 1
+      type: object
+      required:
+      - assistant_id
+      - graph_id
+      - name
+      title: AssistantResponse
+    AssistantSearchRequest:
+      properties:
+        graph_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Graph Id
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Metadata
+        limit:
+          type: integer
+          title: Limit
+          default: 10
+        offset:
+          type: integer
+          title: Offset
+          default: 0
+      type: object
+      title: AssistantSearchRequest
+    Body_login_local_api_v1_auth_login_local_post:
+      properties:
+        grant_type:
+          anyOf:
+          - type: string
+            pattern: ^password$
+          - type: 'null'
+          title: Grant Type
+        username:
+          type: string
+          title: Username
+        password:
+          type: string
+          format: password
+          title: Password
+        scope:
+          type: string
+          title: Scope
+          default: ''
+        client_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Client Id
+        client_secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          format: password
+          title: Client Secret
+      type: object
+      required:
+      - username
+      - password
+      title: Body_login_local_api_v1_auth_login_local_post
+    Body_upload_files_api_threads__thread_id__uploads_post:
+      properties:
+        files:
+          items:
+            type: string
+            contentMediaType: application/octet-stream
+          type: array
+          title: Files
+      type: object
+      required:
+      - files
+      title: Body_upload_files_api_threads__thread_id__uploads_post
+    ChangePasswordRequest:
+      properties:
+        current_password:
+          type: string
+          title: Current Password
+        new_password:
+          type: string
+          minLength: 8
+          title: New Password
+        new_email:
+          anyOf:
+          - type: string
+            format: email
+          - type: 'null'
+          title: New Email
+      type: object
+      required:
+      - current_password
+      - new_password
+      title: ChangePasswordRequest
+      description: Request model for password change (also handles setup flow).
+    ChannelRestartResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - success
+      - message
+      title: ChannelRestartResponse
+    ChannelStatusResponse:
+      properties:
+        service_running:
+          type: boolean
+          title: Service Running
+        channels:
+          additionalProperties:
+            additionalProperties: true
+            type: object
+          type: object
+          title: Channels
+      type: object
+      required:
+      - service_running
+      - channels
+      title: ChannelStatusResponse
+    ContextSection:
+      properties:
+        summary:
+          type: string
+          title: Summary
+          description: Summary content
+          default: ''
+        updatedAt:
+          type: string
+          title: Updatedat
+          description: Last update timestamp
+          default: ''
+      type: object
+      title: ContextSection
+      description: Model for context sections (user and history).
+    CustomSkillContentResponse:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Name of the skill
+        description:
+          type: string
+          title: Description
+          description: Description of what the skill does
+        license:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: License
+          description: License information
+        category:
+          $ref: '#/components/schemas/SkillCategory'
+          description: Category of the skill (public or custom)
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Whether this skill is enabled
+          default: true
+        content:
+          type: string
+          title: Content
+          description: Raw SKILL.md content
+      type: object
+      required:
+      - name
+      - description
+      - category
+      - content
+      title: CustomSkillContentResponse
+    CustomSkillHistoryResponse:
+      properties:
+        history:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: History
+      type: object
+      required:
+      - history
+      title: CustomSkillHistoryResponse
+    CustomSkillUpdateRequest:
+      properties:
+        content:
+          type: string
+          title: Content
+          description: Replacement SKILL.md content
+      type: object
+      required:
+      - content
+      title: CustomSkillUpdateRequest
+    Fact:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique identifier for the fact
+        content:
+          type: string
+          title: Content
+          description: Fact content
+        category:
+          type: string
+          title: Category
+          description: Fact category
+          default: context
+        confidence:
+          type: number
+          title: Confidence
+          description: Confidence score (0-1)
+          default: 0.5
+        createdAt:
+          type: string
+          title: Createdat
+          description: Creation timestamp
+          default: ''
+        source:
+          type: string
+          title: Source
+          description: Source thread ID
+          default: unknown
+        sourceError:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sourceerror
+          description: Optional description of the prior mistake or wrong approach
+      type: object
+      required:
+      - id
+      - content
+      title: Fact
+      description: Model for a memory fact.
+    FactCreateRequest:
+      properties:
+        content:
+          type: string
+          minLength: 1
+          title: Content
+          description: Fact content
+        category:
+          type: string
+          title: Category
+          description: Fact category
+          default: context
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+          description: Confidence score (0-1)
+          default: 0.5
+      type: object
+      required:
+      - content
+      title: FactCreateRequest
+      description: Request model for creating a memory fact.
+    FactPatchRequest:
+      properties:
+        content:
+          anyOf:
+          - type: string
+            minLength: 1
+          - type: 'null'
+          title: Content
+          description: Fact content
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+          description: Fact category
+        confidence:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Confidence
+          description: Confidence score (0-1)
+      type: object
+      title: FactPatchRequest
+      description: PATCH request model that preserves existing values for omitted fields.
+    FeedbackCreateRequest:
+      properties:
+        rating:
+          type: integer
+          title: Rating
+          description: 'Feedback rating: +1 (positive) or -1 (negative)'
+        comment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Comment
+          description: Optional text feedback
+        message_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message Id
+          description: 'Optional: scope feedback to a specific message'
+      type: object
+      required:
+      - rating
+      title: FeedbackCreateRequest
+    FeedbackResponse:
+      properties:
+        feedback_id:
+          type: string
+          title: Feedback Id
+        run_id:
+          type: string
+          title: Run Id
+        thread_id:
+          type: string
+          title: Thread Id
+        user_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: User Id
+        message_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message Id
+        rating:
+          type: integer
+          title: Rating
+        comment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Comment
+        created_at:
+          type: string
+          title: Created At
+          default: ''
+      type: object
+      required:
+      - feedback_id
+      - run_id
+      - thread_id
+      - rating
+      title: FeedbackResponse
+    FeedbackStatsResponse:
+      properties:
+        run_id:
+          type: string
+          title: Run Id
+        total:
+          type: integer
+          title: Total
+          default: 0
+        positive:
+          type: integer
+          title: Positive
+          default: 0
+        negative:
+          type: integer
+          title: Negative
+          default: 0
+      type: object
+      required:
+      - run_id
+      title: FeedbackStatsResponse
+    FeedbackUpsertRequest:
+      properties:
+        rating:
+          type: integer
+          title: Rating
+          description: 'Feedback rating: +1 (positive) or -1 (negative)'
+        comment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Comment
+          description: Optional text feedback
+      type: object
+      required:
+      - rating
+      title: FeedbackUpsertRequest
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HistoryContext:
+      properties:
+        recentMonths:
+          $ref: '#/components/schemas/ContextSection'
+        earlierContext:
+          $ref: '#/components/schemas/ContextSection'
+        longTermBackground:
+          $ref: '#/components/schemas/ContextSection'
+      type: object
+      title: HistoryContext
+      description: Model for history context.
+    HistoryEntry:
+      properties:
+        checkpoint_id:
+          type: string
+          title: Checkpoint Id
+        parent_checkpoint_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parent Checkpoint Id
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+        values:
+          additionalProperties: true
+          type: object
+          title: Values
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        next:
+          items:
+            type: string
+          type: array
+          title: Next
+      type: object
+      required:
+      - checkpoint_id
+      title: HistoryEntry
+      description: Single checkpoint history entry.
+    InitializeAdminRequest:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+        password:
+          type: string
+          minLength: 8
+          title: Password
+      type: object
+      required:
+      - email
+      - password
+      title: InitializeAdminRequest
+      description: Request model for first-boot admin account creation.
+    LoginResponse:
+      properties:
+        expires_in:
+          type: integer
+          title: Expires In
+        needs_setup:
+          type: boolean
+          title: Needs Setup
+          default: false
+      type: object
+      required:
+      - expires_in
+      title: LoginResponse
+      description: Response model for login — token only lives in HttpOnly cookie.
+    McpConfigResponse:
+      properties:
+        mcp_servers:
+          additionalProperties:
+            $ref: '#/components/schemas/McpServerConfigResponse'
+          type: object
+          title: Mcp Servers
+          description: Map of MCP server name to configuration
+      type: object
+      title: McpConfigResponse
+      description: Response model for MCP configuration.
+    McpConfigUpdateRequest:
+      properties:
+        mcp_servers:
+          additionalProperties:
+            $ref: '#/components/schemas/McpServerConfigResponse'
+          type: object
+          title: Mcp Servers
+          description: Map of MCP server name to configuration
+      type: object
+      required:
+      - mcp_servers
+      title: McpConfigUpdateRequest
+      description: Request model for updating MCP configuration.
+    McpOAuthConfigResponse:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Whether OAuth token injection is enabled
+          default: true
+        token_url:
+          type: string
+          title: Token Url
+          description: OAuth token endpoint URL
+          default: ''
+        grant_type:
+          type: string
+          enum:
+          - client_credentials
+          - refresh_token
+          title: Grant Type
+          description: OAuth grant type
+          default: client_credentials
+        client_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Client Id
+          description: OAuth client ID
+        client_secret:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Client Secret
+          description: OAuth client secret
+        refresh_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Refresh Token
+          description: OAuth refresh token
+        scope:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Scope
+          description: OAuth scope
+        audience:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Audience
+          description: OAuth audience
+        token_field:
+          type: string
+          title: Token Field
+          description: Token response field containing access token
+          default: access_token
+        token_type_field:
+          type: string
+          title: Token Type Field
+          description: Token response field containing token type
+          default: token_type
+        expires_in_field:
+          type: string
+          title: Expires In Field
+          description: Token response field containing expires-in seconds
+          default: expires_in
+        default_token_type:
+          type: string
+          title: Default Token Type
+          description: Default token type when response omits token_type
+          default: Bearer
+        refresh_skew_seconds:
+          type: integer
+          title: Refresh Skew Seconds
+          description: Refresh this many seconds before expiry
+          default: 60
+        extra_token_params:
+          additionalProperties:
+            type: string
+          type: object
+          title: Extra Token Params
+          description: Additional form params sent to token endpoint
+      type: object
+      title: McpOAuthConfigResponse
+      description: OAuth configuration for an MCP server.
+    McpServerConfigResponse:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Whether this MCP server is enabled
+          default: true
+        type:
+          type: string
+          title: Type
+          description: 'Transport type: ''stdio'', ''sse'', or ''http'''
+          default: stdio
+        command:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Command
+          description: Command to execute to start the MCP server (for stdio type)
+        args:
+          items:
+            type: string
+          type: array
+          title: Args
+          description: Arguments to pass to the command (for stdio type)
+        env:
+          additionalProperties:
+            type: string
+          type: object
+          title: Env
+          description: Environment variables for the MCP server
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+          description: URL of the MCP server (for sse or http type)
+        headers:
+          additionalProperties:
+            type: string
+          type: object
+          title: Headers
+          description: HTTP headers to send (for sse or http type)
+        oauth:
+          anyOf:
+          - $ref: '#/components/schemas/McpOAuthConfigResponse'
+          - type: 'null'
+          description: OAuth configuration for MCP HTTP/SSE servers
+        description:
+          type: string
+          title: Description
+          description: Human-readable description of what this MCP server provides
+          default: ''
+      type: object
+      title: McpServerConfigResponse
+      description: Response model for MCP server configuration.
+    MemoryConfigResponse:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Whether memory is enabled
+        storage_path:
+          type: string
+          title: Storage Path
+          description: Path to memory storage file
+        debounce_seconds:
+          type: integer
+          title: Debounce Seconds
+          description: Debounce time for memory updates
+        max_facts:
+          type: integer
+          title: Max Facts
+          description: Maximum number of facts to store
+        fact_confidence_threshold:
+          type: number
+          title: Fact Confidence Threshold
+          description: Minimum confidence threshold for facts
+        injection_enabled:
+          type: boolean
+          title: Injection Enabled
+          description: Whether memory injection is enabled
+        max_injection_tokens:
+          type: integer
+          title: Max Injection Tokens
+          description: Maximum tokens for memory injection
+      type: object
+      required:
+      - enabled
+      - storage_path
+      - debounce_seconds
+      - max_facts
+      - fact_confidence_threshold
+      - injection_enabled
+      - max_injection_tokens
+      title: MemoryConfigResponse
+      description: Response model for memory configuration.
+    MemoryResponse:
+      properties:
+        version:
+          type: string
+          title: Version
+          description: Memory schema version
+          default: '1.0'
+        lastUpdated:
+          type: string
+          title: Lastupdated
+          description: Last update timestamp
+          default: ''
+        user:
+          $ref: '#/components/schemas/UserContext'
+        history:
+          $ref: '#/components/schemas/HistoryContext'
+        facts:
+          items:
+            $ref: '#/components/schemas/Fact'
+          type: array
+          title: Facts
+      type: object
+      title: MemoryResponse
+      description: Response model for memory data.
+    MemoryStatusResponse:
+      properties:
+        config:
+          $ref: '#/components/schemas/MemoryConfigResponse'
+        data:
+          $ref: '#/components/schemas/MemoryResponse'
+      type: object
+      required:
+      - config
+      - data
+      title: MemoryStatusResponse
+      description: Response model for memory status.
+    MessageResponse:
+      properties:
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - message
+      title: MessageResponse
+      description: Generic message response.
+    ModelResponse:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Unique identifier for the model
+        model:
+          type: string
+          title: Model
+          description: Actual provider model identifier
+        display_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Display Name
+          description: Human-readable name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: Model description
+        supports_thinking:
+          type: boolean
+          title: Supports Thinking
+          description: Whether model supports thinking mode
+          default: false
+        supports_reasoning_effort:
+          type: boolean
+          title: Supports Reasoning Effort
+          description: Whether model supports reasoning effort
+          default: false
+      type: object
+      required:
+      - name
+      - model
+      title: ModelResponse
+      description: Response model for model information.
+    ModelsListResponse:
+      properties:
+        models:
+          items:
+            $ref: '#/components/schemas/ModelResponse'
+          type: array
+          title: Models
+        token_usage:
+          $ref: '#/components/schemas/TokenUsageResponse'
+      type: object
+      required:
+      - models
+      - token_usage
+      title: ModelsListResponse
+      description: Response model for listing all models.
+    RegisterRequest:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+        password:
+          type: string
+          minLength: 8
+          title: Password
+      type: object
+      required:
+      - email
+      - password
+      title: RegisterRequest
+      description: Request model for user registration.
+    RunCreateRequest:
+      properties:
+        assistant_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assistant Id
+          description: Agent / assistant to use
+        input:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Input
+          description: 'Graph input (e.g. {messages: [...]})'
+        command:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Command
+          description: LangGraph Command
+        metadata:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Metadata
+          description: Run metadata
+        config:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Config
+          description: RunnableConfig overrides
+        context:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Context
+          description: DeerFlow context overrides (model_name, thinking_enabled, etc.)
+        webhook:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Webhook
+          description: Completion callback URL
+        checkpoint_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Checkpoint Id
+          description: Resume from checkpoint
+        checkpoint:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Checkpoint
+          description: Full checkpoint object
+        interrupt_before:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: string
+            const: '*'
+          - type: 'null'
+          title: Interrupt Before
+          description: Nodes to interrupt before
+        interrupt_after:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: string
+            const: '*'
+          - type: 'null'
+          title: Interrupt After
+          description: Nodes to interrupt after
+        stream_mode:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: string
+          - type: 'null'
+          title: Stream Mode
+          description: Stream mode(s)
+        stream_subgraphs:
+          type: boolean
+          title: Stream Subgraphs
+          description: Include subgraph events
+          default: false
+        stream_resumable:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Stream Resumable
+          description: SSE resumable mode
+        on_disconnect:
+          type: string
+          enum:
+          - cancel
+          - continue
+          title: On Disconnect
+          description: Behaviour on SSE disconnect
+          default: cancel
+        on_completion:
+          type: string
+          enum:
+          - delete
+          - keep
+          title: On Completion
+          description: Delete temp thread on completion
+          default: keep
+        multitask_strategy:
+          type: string
+          enum:
+          - reject
+          - rollback
+          - interrupt
+          - enqueue
+          title: Multitask Strategy
+          description: Concurrency strategy
+          default: reject
+        after_seconds:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: After Seconds
+          description: Delayed execution
+        if_not_exists:
+          type: string
+          enum:
+          - reject
+          - create
+          title: If Not Exists
+          description: Thread creation policy
+          default: create
+        feedback_keys:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Feedback Keys
+          description: LangSmith feedback keys
+      type: object
+      title: RunCreateRequest
+    RunResponse:
+      properties:
+        run_id:
+          type: string
+          title: Run Id
+        thread_id:
+          type: string
+          title: Thread Id
+        assistant_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assistant Id
+        status:
+          type: string
+          title: Status
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+        kwargs:
+          additionalProperties: true
+          type: object
+          title: Kwargs
+        multitask_strategy:
+          type: string
+          title: Multitask Strategy
+          default: reject
+        created_at:
+          type: string
+          title: Created At
+          default: ''
+        updated_at:
+          type: string
+          title: Updated At
+          default: ''
+        total_input_tokens:
+          type: integer
+          title: Total Input Tokens
+          default: 0
+        total_output_tokens:
+          type: integer
+          title: Total Output Tokens
+          default: 0
+        total_tokens:
+          type: integer
+          title: Total Tokens
+          default: 0
+        llm_call_count:
+          type: integer
+          title: Llm Call Count
+          default: 0
+        lead_agent_tokens:
+          type: integer
+          title: Lead Agent Tokens
+          default: 0
+        subagent_tokens:
+          type: integer
+          title: Subagent Tokens
+          default: 0
+        middleware_tokens:
+          type: integer
+          title: Middleware Tokens
+          default: 0
+        message_count:
+          type: integer
+          title: Message Count
+          default: 0
+      type: object
+      required:
+      - run_id
+      - thread_id
+      - status
+      title: RunResponse
+    SkillCategory:
+      type: string
+      enum:
+      - public
+      - custom
+      title: SkillCategory
+      description: 'Source category for a skill.
+
+
+        - ``PUBLIC``: built-in skill bundled with the platform, read-only.
+
+        - ``CUSTOM``: user-authored skill that can be edited or deleted.'
+    SkillInstallRequest:
+      properties:
+        thread_id:
+          type: string
+          title: Thread Id
+          description: The thread ID where the .skill file is located
+        path:
+          type: string
+          title: Path
+          description: Virtual path to the .skill file (e.g., mnt/user-data/outputs/my-skill.skill)
+      type: object
+      required:
+      - thread_id
+      - path
+      title: SkillInstallRequest
+      description: Request model for installing a skill from a .skill file.
+    SkillInstallResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+          description: Whether the installation was successful
+        skill_name:
+          type: string
+          title: Skill Name
+          description: Name of the installed skill
+        message:
+          type: string
+          title: Message
+          description: Installation result message
+      type: object
+      required:
+      - success
+      - skill_name
+      - message
+      title: SkillInstallResponse
+      description: Response model for skill installation.
+    SkillResponse:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Name of the skill
+        description:
+          type: string
+          title: Description
+          description: Description of what the skill does
+        license:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: License
+          description: License information
+        category:
+          $ref: '#/components/schemas/SkillCategory'
+          description: Category of the skill (public or custom)
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Whether this skill is enabled
+          default: true
+      type: object
+      required:
+      - name
+      - description
+      - category
+      title: SkillResponse
+      description: Response model for skill information.
+    SkillRollbackRequest:
+      properties:
+        history_index:
+          type: integer
+          title: History Index
+          description: History entry index to restore from, defaulting to the latest change.
+          default: -1
+      type: object
+      title: SkillRollbackRequest
+    SkillUpdateRequest:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Whether to enable or disable the skill
+      type: object
+      required:
+      - enabled
+      title: SkillUpdateRequest
+      description: Request model for updating a skill.
+    SkillsListResponse:
+      properties:
+        skills:
+          items:
+            $ref: '#/components/schemas/SkillResponse'
+          type: array
+          title: Skills
+      type: object
+      required:
+      - skills
+      title: SkillsListResponse
+      description: Response model for listing all skills.
+    SuggestionMessage:
+      properties:
+        role:
+          type: string
+          title: Role
+          description: 'Message role: user|assistant'
+        content:
+          type: string
+          title: Content
+          description: Message content as plain text
+      type: object
+      required:
+      - role
+      - content
+      title: SuggestionMessage
+    SuggestionsRequest:
+      properties:
+        messages:
+          items:
+            $ref: '#/components/schemas/SuggestionMessage'
+          type: array
+          title: Messages
+          description: Recent conversation messages
+        n:
+          type: integer
+          maximum: 5.0
+          minimum: 1.0
+          title: N
+          description: Number of suggestions to generate
+          default: 3
+        model_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Name
+          description: Optional model override
+      type: object
+      required:
+      - messages
+      title: SuggestionsRequest
+    SuggestionsResponse:
+      properties:
+        suggestions:
+          items:
+            type: string
+          type: array
+          title: Suggestions
+          description: Suggested follow-up questions
+      type: object
+      title: SuggestionsResponse
+    ThreadCreateRequest:
+      properties:
+        thread_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Thread Id
+          description: Optional thread ID (auto-generated if omitted)
+        assistant_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assistant Id
+          description: Associate thread with an assistant
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+          description: Initial metadata
+      type: object
+      title: ThreadCreateRequest
+      description: Request body for creating a thread.
+    ThreadDeleteResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        message:
+          type: string
+          title: Message
+      type: object
+      required:
+      - success
+      - message
+      title: ThreadDeleteResponse
+      description: Response model for thread cleanup.
+    ThreadHistoryRequest:
+      properties:
+        limit:
+          type: integer
+          maximum: 100.0
+          minimum: 1.0
+          title: Limit
+          description: Maximum entries
+          default: 10
+        before:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Before
+          description: Cursor for pagination
+      type: object
+      title: ThreadHistoryRequest
+      description: Request body for checkpoint history.
+    ThreadPatchRequest:
+      properties:
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+          description: Metadata to merge
+      type: object
+      title: ThreadPatchRequest
+      description: Request body for patching thread metadata.
+    ThreadResponse:
+      properties:
+        thread_id:
+          type: string
+          title: Thread Id
+          description: Unique thread identifier
+        status:
+          type: string
+          title: Status
+          description: 'Thread status: idle, busy, interrupted, error'
+          default: idle
+        created_at:
+          type: string
+          title: Created At
+          description: ISO timestamp
+          default: ''
+        updated_at:
+          type: string
+          title: Updated At
+          description: ISO timestamp
+          default: ''
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+          description: Thread metadata
+        values:
+          additionalProperties: true
+          type: object
+          title: Values
+          description: Current state channel values
+        interrupts:
+          additionalProperties: true
+          type: object
+          title: Interrupts
+          description: Pending interrupts
+      type: object
+      required:
+      - thread_id
+      title: ThreadResponse
+      description: Response model for a single thread.
+    ThreadSearchRequest:
+      properties:
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+          description: Metadata filter (exact match)
+        limit:
+          type: integer
+          maximum: 1000.0
+          minimum: 1.0
+          title: Limit
+          description: Maximum results
+          default: 100
+        offset:
+          type: integer
+          minimum: 0.0
+          title: Offset
+          description: Pagination offset
+          default: 0
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+          description: Filter by thread status
+      type: object
+      title: ThreadSearchRequest
+      description: Request body for searching threads.
+    ThreadStateResponse:
+      properties:
+        values:
+          additionalProperties: true
+          type: object
+          title: Values
+          description: Current channel values
+        next:
+          items:
+            type: string
+          type: array
+          title: Next
+          description: Next tasks to execute
+        metadata:
+          additionalProperties: true
+          type: object
+          title: Metadata
+          description: Checkpoint metadata
+        checkpoint:
+          additionalProperties: true
+          type: object
+          title: Checkpoint
+          description: Checkpoint info
+        checkpoint_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Checkpoint Id
+          description: Current checkpoint ID
+        parent_checkpoint_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Parent Checkpoint Id
+          description: Parent checkpoint ID
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+          description: Checkpoint timestamp
+        tasks:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Tasks
+          description: Interrupted task details
+      type: object
+      title: ThreadStateResponse
+      description: Response model for thread state.
+    ThreadStateUpdateRequest:
+      properties:
+        values:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Values
+          description: Channel values to merge
+        checkpoint_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Checkpoint Id
+          description: Checkpoint to branch from
+        checkpoint:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Checkpoint
+          description: Full checkpoint object
+        as_node:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: As Node
+          description: Node identity for the update
+      type: object
+      title: ThreadStateUpdateRequest
+      description: Request body for updating thread state (human-in-the-loop resume).
+    ThreadTokenUsageCallerBreakdown:
+      properties:
+        lead_agent:
+          type: integer
+          title: Lead Agent
+          default: 0
+        subagent:
+          type: integer
+          title: Subagent
+          default: 0
+        middleware:
+          type: integer
+          title: Middleware
+          default: 0
+      type: object
+      title: ThreadTokenUsageCallerBreakdown
+    ThreadTokenUsageModelBreakdown:
+      properties:
+        tokens:
+          type: integer
+          title: Tokens
+          default: 0
+        runs:
+          type: integer
+          title: Runs
+          default: 0
+      type: object
+      title: ThreadTokenUsageModelBreakdown
+    ThreadTokenUsageResponse:
+      properties:
+        thread_id:
+          type: string
+          title: Thread Id
+        total_tokens:
+          type: integer
+          title: Total Tokens
+          default: 0
+        total_input_tokens:
+          type: integer
+          title: Total Input Tokens
+          default: 0
+        total_output_tokens:
+          type: integer
+          title: Total Output Tokens
+          default: 0
+        total_runs:
+          type: integer
+          title: Total Runs
+          default: 0
+        by_model:
+          additionalProperties:
+            $ref: '#/components/schemas/ThreadTokenUsageModelBreakdown'
+          type: object
+          title: By Model
+        by_caller:
+          $ref: '#/components/schemas/ThreadTokenUsageCallerBreakdown'
+      type: object
+      required:
+      - thread_id
+      title: ThreadTokenUsageResponse
+    TokenUsageResponse:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Whether token usage display is enabled
+          default: false
+      type: object
+      title: TokenUsageResponse
+      description: Token usage display configuration.
+    UploadLimits:
+      properties:
+        max_files:
+          type: integer
+          title: Max Files
+        max_file_size:
+          type: integer
+          title: Max File Size
+        max_total_size:
+          type: integer
+          title: Max Total Size
+      type: object
+      required:
+      - max_files
+      - max_file_size
+      - max_total_size
+      title: UploadLimits
+      description: Application-level upload limits exposed to clients.
+    UploadResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+        files:
+          items:
+            additionalProperties:
+              type: string
+            type: object
+          type: array
+          title: Files
+        message:
+          type: string
+          title: Message
+        skipped_files:
+          items:
+            type: string
+          type: array
+          title: Skipped Files
+      type: object
+      required:
+      - success
+      - files
+      - message
+      title: UploadResponse
+      description: Response model for file upload.
+    UserContext:
+      properties:
+        workContext:
+          $ref: '#/components/schemas/ContextSection'
+        personalContext:
+          $ref: '#/components/schemas/ContextSection'
+        topOfMind:
+          $ref: '#/components/schemas/ContextSection'
+      type: object
+      title: UserContext
+      description: Model for user context.
+    UserProfileResponse:
+      properties:
+        content:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Content
+          description: USER.md content, or null if not yet created
+      type: object
+      title: UserProfileResponse
+      description: Response model for the global user profile (USER.md).
+    UserProfileUpdateRequest:
+      properties:
+        content:
+          type: string
+          title: Content
+          description: USER.md content — describes the user's background and preferences
+          default: ''
+      type: object
+      title: UserProfileUpdateRequest
+      description: Request body for setting the global user profile.
+    UserResponse:
+      properties:
+        id:
+          type: string
+          title: Id
+        email:
+          type: string
+          title: Email
+        system_role:
+          type: string
+          enum:
+          - admin
+          - user
+          title: System Role
+        needs_setup:
+          type: boolean
+          title: Needs Setup
+          default: false
+      type: object
+      required:
+      - id
+      - email
+      - system_role
+      title: UserResponse
+      description: Response model for user info endpoint.
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+tags:
+- name: Health
+  description: Service health check
+- name: Auth
+  description: Authentication — register, login, OAuth, password management, setup
+- name: Models
+  description: List and describe available AI models
+- name: Threads
+  description: Conversation thread CRUD, state, history, messages
+- name: Thread Runs
+  description: Execute agents on threads — stream, wait, cancel, join
+- name: Runs
+  description: Stateless agent runs without a persistent thread
+- name: Feedback
+  description: User like/dislike feedback on agent responses
+- name: Memory
+  description: Persistent memory — facts, context, import/export, reload
+- name: Skills
+  description: Agent skills — list, detail, enable/disable, install .skill archives
+- name: MCP
+  description: MCP server configuration
+- name: Agents
+  description: Custom agent CRUD and user profile
+- name: Uploads
+  description: File upload with automatic document conversion (PDF/Word/PPT/Excel)
+- name: Artifacts
+  description: Agent-generated file artifacts served from thread sandbox
+- name: Suggestions
+  description: AI-generated follow-up question suggestions
+- name: Channels
+  description: IM channel (Feishu/Slack/Telegram/DingTalk) status and control
+- name: Assistants
+  description: Backward-compatible LangGraph assistants API
+servers:
+- url: http://localhost:2026
+  description: Nginx unified entry (recommended)
+- url: http://localhost:8001
+  description: Gateway direct (development)
+externalDocs:
+  description: DeerFlow Documentation
+  url: https://github.com/deer-flow/deer-flow/tree/main/docs

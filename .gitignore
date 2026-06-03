@@ -1,5 +1,7 @@
 # DeerFlow docker image cache
 docker/.cache/
+docker/langfuse/.env
+docker/langfuse/docker-compose.upstream.yml
 # oh-my-claudecode state
 .omc/
 # OS generated files
