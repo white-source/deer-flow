@@ -7,18 +7,17 @@ is reused so that conversation history is preserved across calls.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.gateway.authz import require_permission
 from app.gateway.deps import get_checkpointer, get_feedback_repo, get_run_event_store, get_run_manager, get_run_store, get_stream_bridge
-from app.gateway.routers.thread_runs import RunCreateRequest
+from app.gateway.routers.thread_runs import RunCreateRequest, _await_run_task, _queued_run_response
 from app.gateway.services import sse_consumer, start_run
-from deerflow.runtime import serialize_channel_values
+from deerflow.runtime import RunStatus, serialize_channel_values
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -45,6 +44,9 @@ async def stateless_stream(body: RunCreateRequest, request: Request) -> Streamin
     run_mgr = get_run_manager(request)
     record = await start_run(body, thread_id, request)
 
+    if record.status == RunStatus.queued:
+        return await _queued_run_response(record, request)
+
     return StreamingResponse(
         sse_consumer(bridge, record, request, run_mgr),
         media_type="text/event-stream",
@@ -67,12 +69,7 @@ async def stateless_wait(body: RunCreateRequest, request: Request) -> dict:
     """
     thread_id = _resolve_thread_id(body)
     record = await start_run(body, thread_id, request)
-
-    if record.task is not None:
-        try:
-            await record.task
-        except asyncio.CancelledError:
-            pass
+    record = await _await_run_task(record, request)
 
     checkpointer = get_checkpointer(request)
     config = {"configurable": {"thread_id": thread_id}}

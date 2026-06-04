@@ -959,6 +959,12 @@ database:
 #   backend: memory
 #   max_trace_content: 10240    # Truncation threshold for trace content (db backend, bytes)
 #   track_token_usage: true     # Accumulate token counts to RunRow
+# Run queue / worker pool (Gateway)
+runs:
+  queue:
+    max_depth_per_thread: 50
+  workers: 4
+
 run_events:
   backend: memory
   max_trace_content: 10240

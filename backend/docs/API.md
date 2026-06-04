@@ -114,8 +114,21 @@ nested subagent graphs.
 - `model_name` (string): Override the default model
 - `thinking_enabled` (boolean): Enable extended thinking for supported models
 - `is_plan_mode` (boolean): Enable TodoList middleware for task tracking
+- `multitask_strategy` (string): `reject` (default), `interrupt`, `rollback`, or `enqueue`
 
-**Response:** Server-Sent Events (SSE) stream
+**Multitask strategy `enqueue`:**
+
+When the thread already has a pending/running run, new requests are accepted into a per-thread FIFO queue instead of returning HTTP 409.
+
+| Condition | Status | Response |
+|-----------|--------|----------|
+| Thread idle | Run starts immediately | `200` SSE stream |
+| Thread busy | Run is queued | `202` JSON `RunResponse` with `status: "queued"` and `queue_position` |
+| Queue full | Rejected | `429` |
+
+Poll `GET /api/threads/{thread_id}/runs/{run_id}` until `status` is `running`, then join the stream via `GET /api/threads/{thread_id}/runs/{run_id}/join`. Joining a queued run returns `409` with `queue_position`.
+
+**Response:** Server-Sent Events (SSE) stream when the run starts immediately; otherwise `202` JSON as above.
 
 ```
 event: values

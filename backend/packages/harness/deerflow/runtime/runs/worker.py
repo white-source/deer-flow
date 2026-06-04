@@ -427,6 +427,8 @@ async def run_agent(
         await bridge.publish_end(run_id)
         asyncio.create_task(bridge.cleanup(run_id, delay=60))
 
+        await run_manager.notify_run_terminal(thread_id, run_id)
+
 
 # ---------------------------------------------------------------------------
 # Helpers

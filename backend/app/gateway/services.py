@@ -18,7 +18,7 @@ from fastapi import HTTPException, Request
 from langchain_core.messages import BaseMessage
 from langchain_core.messages.utils import convert_to_messages
 
-from app.gateway.deps import get_run_context, get_run_manager, get_stream_bridge
+from app.gateway.deps import get_run_context, get_run_dispatcher, get_run_manager, get_stream_bridge
 from app.gateway.utils import sanitize_log_param
 from deerflow.config.app_config import get_app_config
 from deerflow.runtime import (
@@ -33,6 +33,7 @@ from deerflow.runtime import (
     UnsupportedStrategyError,
     run_agent,
 )
+from deerflow.runtime.runs.dispatcher import LaunchContext
 from deerflow.runtime.runs.naming import resolve_root_run_name
 
 logger = logging.getLogger(__name__)
@@ -262,6 +263,26 @@ def build_run_config(
 # ---------------------------------------------------------------------------
 
 
+async def launch_run_task(record: RunRecord, launch_ctx: LaunchContext) -> None:
+    """Start ``run_agent`` as a background task on *record*."""
+    task = asyncio.create_task(
+        run_agent(
+            launch_ctx.bridge,
+            launch_ctx.run_mgr,
+            record,
+            ctx=launch_ctx.run_ctx,
+            agent_factory=launch_ctx.agent_factory,
+            graph_input=launch_ctx.graph_input,
+            config=launch_ctx.config,
+            stream_modes=launch_ctx.stream_modes,
+            stream_subgraphs=launch_ctx.stream_subgraphs,
+            interrupt_before=launch_ctx.interrupt_before,
+            interrupt_after=launch_ctx.interrupt_after,
+        )
+    )
+    record.task = task
+
+
 async def start_run(
     body: Any,
     thread_id: str,
@@ -314,6 +335,8 @@ async def start_run(
         )
     except ConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except OverflowError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except UnsupportedStrategyError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
 
@@ -346,26 +369,21 @@ async def start_run(
 
     stream_modes = normalize_stream_modes(body.stream_mode)
 
-    task = asyncio.create_task(
-        run_agent(
-            bridge,
-            run_mgr,
-            record,
-            ctx=run_ctx,
-            agent_factory=agent_factory,
-            graph_input=graph_input,
-            config=config,
-            stream_modes=stream_modes,
-            stream_subgraphs=body.stream_subgraphs,
-            interrupt_before=body.interrupt_before,
-            interrupt_after=body.interrupt_after,
-        )
+    launch_ctx = LaunchContext(
+        bridge=bridge,
+        run_ctx=run_ctx,
+        run_mgr=run_mgr,
+        agent_factory=agent_factory,
+        graph_input=graph_input,
+        config=config,
+        stream_modes=stream_modes,
+        stream_subgraphs=body.stream_subgraphs,
+        interrupt_before=body.interrupt_before,
+        interrupt_after=body.interrupt_after,
     )
-    record.task = task
 
-    # Title sync is handled by worker.py's finally block which reads the
-    # title from the checkpoint and calls thread_store.update_display_name
-    # after the run completes.
+    dispatcher = get_run_dispatcher(request)
+    await dispatcher.submit(record, launch_ctx)
 
     return record
 

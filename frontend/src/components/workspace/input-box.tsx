@@ -9,6 +9,7 @@ import {
   PlusIcon,
   SparklesIcon,
   RocketIcon,
+  SquareIcon,
   XIcon,
   ZapIcon,
 } from "lucide-react";
@@ -252,12 +253,10 @@ export function InputBox({
     [onContextChange, context],
   );
 
+  const isStreaming = status === "streaming";
+
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
-      if (status === "streaming") {
-        onStop?.();
-        return;
-      }
       if (!message.text.trim() && message.files.length === 0) {
         return;
       }
@@ -289,10 +288,8 @@ export function InputBox({
       context,
       onContextChange,
       onSubmit,
-      onStop,
       resolvedModelName,
       selectedModel?.supports_thinking,
-      status,
     ],
   );
 
@@ -847,11 +844,23 @@ export function InputBox({
                 </ModelSelectorList>
               </ModelSelectorContent>
             </ModelSelector>
+            {isStreaming && onStop ? (
+              <PromptInputButton
+                aria-label={t.common.stop}
+                className="rounded-full"
+                disabled={disabled}
+                type="button"
+                variant="outline"
+                onClick={() => onStop()}
+              >
+                <SquareIcon className="size-4" />
+              </PromptInputButton>
+            ) : null}
             <PromptInputSubmit
               className="rounded-full"
               disabled={disabled}
               variant="outline"
-              status={status}
+              status={isStreaming ? "ready" : status}
             />
           </PromptInputTools>
         </PromptInputFooter>

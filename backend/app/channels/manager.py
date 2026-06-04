@@ -779,7 +779,7 @@ class ChannelManager:
                 input={"messages": [{"role": "human", "content": msg.text}]},
                 config=run_config,
                 context=run_context,
-                multitask_strategy="reject",
+                multitask_strategy="enqueue",
             )
         except Exception as exc:
             if _is_thread_busy_error(exc):
@@ -847,7 +847,7 @@ class ChannelManager:
                 config=run_config,
                 context=run_context,
                 stream_mode=["messages-tuple", "values"],
-                multitask_strategy="reject",
+                multitask_strategy="enqueue",
             ):
                 event = getattr(chunk, "event", "")
                 data = getattr(chunk, "data", None)

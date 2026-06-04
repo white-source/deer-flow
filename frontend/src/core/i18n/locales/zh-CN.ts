@@ -27,6 +27,7 @@ export const zhCN: Translations = {
     share: "分享",
     openInNewWindow: "在新窗口打开",
     close: "关闭",
+    stop: "停止",
     more: "更多",
     search: "搜索",
     loadMore: "加载更多",

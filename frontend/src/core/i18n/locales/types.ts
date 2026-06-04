@@ -16,6 +16,7 @@ export interface Translations {
     share: string;
     openInNewWindow: string;
     close: string;
+    stop: string;
     more: string;
     search: string;
     loadMore: string;

@@ -510,6 +510,20 @@ class TestWrapModelCall:
 
 
 class TestTodoMiddlewareAgentGraphIntegration:
+    def test_compiles_with_thread_state_without_channel_conflict(self):
+        from langchain.agents import create_agent
+
+        from deerflow.agents.thread_state import ThreadState
+
+        mw = TodoMiddleware()
+        graph = create_agent(
+            model=_CapturingFakeMessagesListChatModel(responses=[AIMessage(content="ok")]),
+            tools=[],
+            middleware=[mw],
+            state_schema=ThreadState,
+        )
+        assert graph is not None
+
     def test_completion_reminder_is_transient_in_real_agent_graph(self):
         mw = TodoMiddleware()
         model = _CapturingFakeMessagesListChatModel(

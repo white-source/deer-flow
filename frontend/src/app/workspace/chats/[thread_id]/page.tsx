@@ -70,6 +70,7 @@ export default function ChatPage() {
     pendingUsageMessages,
     sendMessage,
     isUploading,
+    queuedRunCount,
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,
@@ -206,6 +207,12 @@ export default function ChatPage() {
                     </div>
                   </div>
                 )}
+                {queuedRunCount > 0 ? (
+                  <p className="text-muted-foreground mb-2 text-center text-sm">
+                    {queuedRunCount} message{queuedRunCount === 1 ? "" : "s"}{" "}
+                    queued
+                  </p>
+                ) : null}
                 {mountedRef.current ? (
                   <InputBox
                     className={cn(

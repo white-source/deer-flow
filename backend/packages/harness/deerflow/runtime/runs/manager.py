@@ -115,12 +115,36 @@ class RunManager:
         self,
         store: RunStore | None = None,
         *,
+        queue: Any | None = None,
         persistence_retry_policy: PersistenceRetryPolicy | None = None,
     ) -> None:
         self._runs: dict[str, RunRecord] = {}
         self._lock = asyncio.Lock()
         self._store = store
+        self._queue = queue
         self._persistence_retry_policy = persistence_retry_policy or PersistenceRetryPolicy()
+        self._run_terminal_handler: Callable[[str, str], Awaitable[None]] | None = None
+
+    def set_run_terminal_handler(
+        self,
+        handler: Callable[[str, str], Awaitable[None]] | None,
+    ) -> None:
+        """Register a callback invoked after a run reaches a terminal state."""
+        self._run_terminal_handler = handler
+
+    async def notify_run_terminal(self, thread_id: str, run_id: str) -> None:
+        """Invoke the registered terminal handler, if any."""
+        handler = self._run_terminal_handler
+        if handler is not None:
+            await handler(thread_id, run_id)
+
+    async def has_inflight(self, thread_id: str) -> bool:
+        """Return True when *thread_id* has a pending or running run."""
+        async with self._lock:
+            return any(
+                r.thread_id == thread_id and r.status in (RunStatus.pending, RunStatus.running)
+                for r in self._runs.values()
+            )
 
     @staticmethod
     def _store_put_payload(record: RunRecord, *, error: str | None = None) -> dict[str, Any]:
@@ -482,6 +506,14 @@ class RunManager:
                 return False
             if record.status == RunStatus.interrupted:
                 return True  # idempotent — already cancelled on this worker
+            if record.status == RunStatus.queued:
+                if self._queue is not None:
+                    await self._queue.remove(record.thread_id, run_id)
+                record.status = RunStatus.interrupted
+                record.updated_at = _now_iso()
+                await self._persist_status(record, RunStatus.interrupted)
+                logger.info("Run %s cancelled while queued", run_id)
+                return True
             if record.status not in (RunStatus.pending, RunStatus.running):
                 return False
             record.abort_action = action
@@ -517,7 +549,7 @@ class RunManager:
         run_id = str(uuid.uuid4())
         now = _now_iso()
 
-        _supported_strategies = ("reject", "interrupt", "rollback")
+        _supported_strategies = ("reject", "interrupt", "rollback", "enqueue")
         interrupted_records: list[RunRecord] = []
 
         async with self._lock:
@@ -529,6 +561,9 @@ class RunManager:
             if multitask_strategy == "reject" and inflight:
                 raise ConflictError(f"Thread {thread_id} already has an active run")
 
+            if multitask_strategy == "enqueue" and self._queue is None:
+                raise UnsupportedStrategyError("Multitask strategy 'enqueue' requires a ThreadRunQueue on RunManager")
+
             if multitask_strategy in ("interrupt", "rollback") and inflight:
                 logger.info(
                     "Preparing to cancel %d inflight run(s) on thread %s (strategy=%s)",
@@ -537,11 +572,15 @@ class RunManager:
                     multitask_strategy,
                 )
 
+            initial_status = RunStatus.pending
+            if multitask_strategy == "enqueue" and inflight:
+                initial_status = RunStatus.queued
+
             record = RunRecord(
                 run_id=run_id,
                 thread_id=thread_id,
                 assistant_id=assistant_id,
-                status=RunStatus.pending,
+                status=initial_status,
                 on_disconnect=on_disconnect,
                 multitask_strategy=multitask_strategy,
                 metadata=metadata or {},
@@ -572,6 +611,12 @@ class RunManager:
                     r.status = RunStatus.interrupted
                     r.updated_at = now
                     interrupted_records.append(r)
+
+            queued_for_enqueue = multitask_strategy == "enqueue" and initial_status == RunStatus.queued
+
+        if queued_for_enqueue:
+            assert self._queue is not None
+            await self._queue.enqueue(thread_id, run_id)
 
         for interrupted_record in interrupted_records:
             await self._persist_status(interrupted_record, RunStatus.interrupted)

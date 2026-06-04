@@ -67,6 +67,7 @@ export default function AgentChatPage() {
     pendingUsageMessages,
     sendMessage,
     isUploading,
+    queuedRunCount,
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,
@@ -226,6 +227,13 @@ export default function AgentChatPage() {
                     </div>
                   </div>
                 )}
+
+                {queuedRunCount > 0 ? (
+                  <p className="text-muted-foreground mb-2 text-center text-sm">
+                    {queuedRunCount} message{queuedRunCount === 1 ? "" : "s"}{" "}
+                    queued
+                  </p>
+                ) : null}
 
                 <InputBox
                   className={cn(

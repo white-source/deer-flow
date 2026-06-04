@@ -162,7 +162,21 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         app.state.run_event_store = make_run_event_store(run_events_config)
 
         # RunManager with store backing for persistence
-        app.state.run_manager = RunManager(store=app.state.run_store)
+        from deerflow.runtime.runs.dispatcher import RunDispatcher
+        from deerflow.runtime.runs.queue import ThreadRunQueue
+
+        from app.gateway import services
+
+        run_queue = ThreadRunQueue(max_depth=50)
+        app.state.run_queue = run_queue
+        app.state.run_manager = RunManager(store=app.state.run_store, queue=run_queue)
+        app.state.run_dispatcher = RunDispatcher(
+            workers=4,
+            queue=run_queue,
+            run_manager=app.state.run_manager,
+            launch=services.launch_run_task,
+        )
+        await app.state.run_dispatcher.start()
         if getattr(config.database, "backend", None) == "sqlite":
             from deerflow.utils.time import now_iso
 
@@ -177,6 +191,9 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         try:
             yield
         finally:
+            dispatcher = getattr(app.state, "run_dispatcher", None)
+            if dispatcher is not None:
+                await dispatcher.stop()
             await close_engine()
 
 
@@ -200,6 +217,7 @@ def _require(attr: str, label: str) -> Callable[[Request], T]:
 
 get_stream_bridge: Callable[[Request], StreamBridge] = _require("stream_bridge", "Stream bridge")
 get_run_manager: Callable[[Request], RunManager] = _require("run_manager", "Run manager")
+get_run_dispatcher: Callable[[Request], Any] = _require("run_dispatcher", "Run dispatcher")
 get_checkpointer: Callable[[Request], Checkpointer] = _require("checkpointer", "Checkpointer")
 get_run_event_store: Callable[[Request], RunEventStore] = _require("run_event_store", "Run event store")
 get_feedback_repo: Callable[[Request], FeedbackRepository] = _require("feedback_repo", "Feedback")

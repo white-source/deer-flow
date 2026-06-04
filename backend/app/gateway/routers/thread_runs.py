@@ -16,11 +16,11 @@ import logging
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_permission
-from app.gateway.deps import get_checkpointer, get_current_user, get_feedback_repo, get_run_event_store, get_run_manager, get_run_store, get_stream_bridge
+from app.gateway.deps import get_checkpointer, get_current_user, get_feedback_repo, get_run_dispatcher, get_run_event_store, get_run_manager, get_run_store, get_stream_bridge
 from app.gateway.services import sse_consumer, start_run
 from deerflow.runtime import RunRecord, RunStatus, serialize_channel_values
 
@@ -66,6 +66,7 @@ class RunResponse(BaseModel):
     multitask_strategy: str = "reject"
     created_at: str = ""
     updated_at: str = ""
+    queue_position: int | None = None
     total_input_tokens: int = 0
     total_output_tokens: int = 0
     total_tokens: int = 0
@@ -108,7 +109,7 @@ def _cancel_conflict_detail(run_id: str, record: RunRecord) -> str:
     return f"Run {run_id} is not cancellable (status: {record.status.value})"
 
 
-def _record_to_response(record: RunRecord) -> RunResponse:
+def _record_to_response(record: RunRecord, *, queue_position: int | None = None) -> RunResponse:
     return RunResponse(
         run_id=record.run_id,
         thread_id=record.thread_id,
@@ -119,6 +120,7 @@ def _record_to_response(record: RunRecord) -> RunResponse:
         multitask_strategy=record.multitask_strategy,
         created_at=record.created_at,
         updated_at=record.updated_at,
+        queue_position=queue_position,
         total_input_tokens=record.total_input_tokens,
         total_output_tokens=record.total_output_tokens,
         total_tokens=record.total_tokens,
@@ -130,6 +132,36 @@ def _record_to_response(record: RunRecord) -> RunResponse:
     )
 
 
+async def _queued_run_response(record: RunRecord, request: Request) -> JSONResponse:
+    dispatcher = get_run_dispatcher(request)
+    position = await dispatcher.queue_position(record.thread_id, record.run_id)
+    body = _record_to_response(record, queue_position=position)
+    return JSONResponse(
+        status_code=202,
+        content=body.model_dump(),
+        headers={
+            "Content-Location": f"/api/threads/{record.thread_id}/runs/{record.run_id}",
+        },
+    )
+
+
+async def _await_run_task(record: RunRecord, request: Request) -> RunRecord:
+    """Block until *record* finishes, including while it is still queued."""
+    run_mgr = get_run_manager(request)
+    current = record
+    while current.status == RunStatus.queued:
+        await asyncio.sleep(0.05)
+        refreshed = await run_mgr.get(current.run_id)
+        if refreshed is not None:
+            current = refreshed
+    if current.task is not None:
+        try:
+            await current.task
+        except asyncio.CancelledError:
+            pass
+    return current
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -137,15 +169,17 @@ def _record_to_response(record: RunRecord) -> RunResponse:
 
 @router.post("/{thread_id}/runs", response_model=RunResponse)
 @require_permission("runs", "create", owner_check=True, require_existing=True)
-async def create_run(thread_id: str, body: RunCreateRequest, request: Request) -> RunResponse:
+async def create_run(thread_id: str, body: RunCreateRequest, request: Request):
     """Create a background run (returns immediately)."""
     record = await start_run(body, thread_id, request)
+    if record.status == RunStatus.queued:
+        return await _queued_run_response(record, request)
     return _record_to_response(record)
 
 
 @router.post("/{thread_id}/runs/stream")
 @require_permission("runs", "create", owner_check=True, require_existing=True)
-async def stream_run(thread_id: str, body: RunCreateRequest, request: Request) -> StreamingResponse:
+async def stream_run(thread_id: str, body: RunCreateRequest, request: Request):
     """Create a run and stream events via SSE.
 
     The response includes a ``Content-Location`` header with the run's
@@ -155,6 +189,9 @@ async def stream_run(thread_id: str, body: RunCreateRequest, request: Request) -
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
     record = await start_run(body, thread_id, request)
+
+    if record.status == RunStatus.queued:
+        return await _queued_run_response(record, request)
 
     return StreamingResponse(
         sse_consumer(bridge, record, request, run_mgr),
@@ -176,12 +213,7 @@ async def stream_run(thread_id: str, body: RunCreateRequest, request: Request) -
 async def wait_run(thread_id: str, body: RunCreateRequest, request: Request) -> dict:
     """Create a run and block until it completes, returning the final state."""
     record = await start_run(body, thread_id, request)
-
-    if record.task is not None:
-        try:
-            await record.task
-        except asyncio.CancelledError:
-            pass
+    record = await _await_run_task(record, request)
 
     checkpointer = get_checkpointer(request)
     config = {"configurable": {"thread_id": thread_id}}
@@ -262,6 +294,17 @@ async def join_run(thread_id: str, run_id: str, request: Request) -> StreamingRe
     record = await run_mgr.get(run_id)
     if record is None or record.thread_id != thread_id:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    if record.status == RunStatus.queued:
+        dispatcher = get_run_dispatcher(request)
+        position = await dispatcher.queue_position(thread_id, run_id)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "status": record.status.value,
+                "queue_position": position,
+                "message": "Run is queued and not yet streamable",
+            },
+        )
     if record.store_only:
         raise HTTPException(status_code=409, detail=f"Run {run_id} is not active on this worker and cannot be streamed")
 
@@ -297,6 +340,17 @@ async def stream_existing_run(
     record = await run_mgr.get(run_id)
     if record is None or record.thread_id != thread_id:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    if record.status == RunStatus.queued and action is None:
+        dispatcher = get_run_dispatcher(request)
+        position = await dispatcher.queue_position(thread_id, run_id)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "status": record.status.value,
+                "queue_position": position,
+                "message": "Run is queued and not yet streamable",
+            },
+        )
     if record.store_only and action is None:
         raise HTTPException(status_code=409, detail=f"Run {run_id} is not active on this worker and cannot be streamed")
 

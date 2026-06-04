@@ -7,6 +7,7 @@ class RunStatus(StrEnum):
     """Lifecycle status of a single run."""
 
     pending = "pending"
+    queued = "queued"
     running = "running"
     success = "success"
     error = "error"

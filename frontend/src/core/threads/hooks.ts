@@ -18,6 +18,13 @@ import type { UploadedFileInfo } from "../uploads";
 import { promptInputFilePartToFile, uploadFiles } from "../uploads";
 
 import { fetchThreadTokenUsage } from "./api";
+import {
+  adjustQueueDepth,
+  countQueuedRuns,
+  submitEnqueuedRun,
+  THREAD_RUN_STREAM_MODES,
+  waitUntilRunJoinable,
+} from "./run-queue";
 import { threadTokenUsageQueryKey } from "./token-usage";
 import type {
   AgentThread,
@@ -188,6 +195,11 @@ export function useThreadStream({
   // and to allow access to the current thread id in onUpdateEvent
   const threadIdRef = useRef<string | null>(threadId ?? null);
   const startedRef = useRef(false);
+  const pendingJoinRunsRef = useRef<string[]>([]);
+  const drainingJoinRunsRef = useRef(false);
+  const drainPendingJoinRunsRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve(),
+  );
   const pendingUsageBaselineMessageIdsRef = useRef<Set<string>>(new Set());
   const listeners = useRef({
     onSend,
@@ -370,17 +382,18 @@ export function useThreadStream({
           queryKey: threadTokenUsageQueryKey(threadIdRef.current),
         });
       }
+      void drainPendingJoinRunsRef.current();
     },
   });
 
   // Optimistic messages shown before the server stream responds
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [queuedRunCount, setQueuedRunCount] = useState(0);
   const humanMessageCount = thread.messages.filter(
     (m) => m.type === "human",
   ).length;
   const latestMessageCountsRef = useRef({ humanMessageCount });
-  const sendInFlightRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
   const summarizedRef = useRef<Set<string>>(null);
   // Track human message count before sending to prevent clearing optimistic
@@ -394,9 +407,63 @@ export function useThreadStream({
 
   // Reset thread-local pending UI state when switching between threads so
   // optimistic messages and in-flight guards do not leak across chat views.
+  const drainPendingJoinRuns = useCallback(async () => {
+    const activeThreadId = threadIdRef.current;
+    if (
+      !activeThreadId ||
+      activeThreadId === "new" ||
+      thread.isLoading ||
+      drainingJoinRunsRef.current ||
+      pendingJoinRunsRef.current.length === 0
+    ) {
+      return;
+    }
+
+    const runId = pendingJoinRunsRef.current[0];
+    if (!runId) {
+      return;
+    }
+
+    drainingJoinRunsRef.current = true;
+    try {
+      await waitUntilRunJoinable(activeThreadId, runId);
+      if (thread.isLoading || threadIdRef.current !== activeThreadId) {
+        return;
+      }
+      await thread.joinStream(runId, undefined, {
+        streamMode: [...THREAD_RUN_STREAM_MODES],
+      });
+      pendingJoinRunsRef.current = pendingJoinRunsRef.current.slice(1);
+      setQueuedRunCount((count) => adjustQueueDepth(count, -1));
+    } catch (error) {
+      pendingJoinRunsRef.current = pendingJoinRunsRef.current.filter(
+        (id) => id !== runId,
+      );
+      setQueuedRunCount((count) => adjustQueueDepth(count, -1));
+      toast.error(getStreamErrorMessage(error));
+    } finally {
+      drainingJoinRunsRef.current = false;
+      if (
+        pendingJoinRunsRef.current.length > 0 &&
+        !thread.isLoading &&
+        threadIdRef.current === activeThreadId
+      ) {
+        void drainPendingJoinRunsRef.current();
+      }
+    }
+  }, [thread]);
+
+  drainPendingJoinRunsRef.current = drainPendingJoinRuns;
+
+  useEffect(() => {
+    void drainPendingJoinRuns();
+  }, [thread.isLoading, drainPendingJoinRuns]);
+
   useEffect(() => {
     startedRef.current = false;
-    sendInFlightRef.current = false;
+    pendingJoinRunsRef.current = [];
+    drainingJoinRunsRef.current = false;
+    setQueuedRunCount(0);
     pendingUsageBaselineMessageIdsRef.current = new Set(
       messagesRef.current
         .map(messageIdentity)
@@ -439,6 +506,29 @@ export function useThreadStream({
     }
   }, [hasHumanOptimistic, humanMessageCount, optimisticMessageCount]);
 
+  useEffect(() => {
+    if (!threadId || threadId === "new") {
+      return;
+    }
+    if (!thread.isLoading && queuedRunCount === 0) {
+      return;
+    }
+    let cancelled = false;
+    const sync = () => {
+      void countQueuedRuns(threadId).then((count) => {
+        if (!cancelled) {
+          setQueuedRunCount(count);
+        }
+      });
+    };
+    sync();
+    const timer = window.setInterval(sync, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [thread.isLoading, threadId, queuedRunCount]);
+
   const sendMessage = useCallback(
     async (
       threadId: string,
@@ -446,10 +536,9 @@ export function useThreadStream({
       extraContext?: Record<string, unknown>,
       options?: SendMessageOptions,
     ) => {
-      if (sendInFlightRef.current) {
+      if (isUploading) {
         return;
       }
-      sendInFlightRef.current = true;
 
       const text = message.text.trim();
 
@@ -577,8 +666,27 @@ export function useThreadStream({
           }),
         );
 
-        await thread.submit(
-          {
+        const submitContext = {
+          ...extraContext,
+          ...context,
+          thinking_enabled: context.mode !== "flash",
+          is_plan_mode: context.mode === "pro" || context.mode === "ultra",
+          subagent_enabled: context.mode === "ultra",
+          reasoning_effort:
+            context.reasoning_effort ??
+            (context.mode === "ultra"
+              ? "high"
+              : context.mode === "pro"
+                ? "medium"
+                : context.mode === "thinking"
+                  ? "low"
+                  : undefined),
+          thread_id: threadId,
+        };
+
+        const runPayload = {
+          assistant_id: "lead_agent",
+          input: {
             messages: [
               {
                 type: "human",
@@ -597,42 +705,58 @@ export function useThreadStream({
               },
             ],
           },
-          {
-            threadId: threadId,
-            streamSubgraphs: true,
-            streamResumable: true,
-            config: {
-              recursion_limit: 1000,
-            },
-            context: {
-              ...extraContext,
-              ...context,
-              thinking_enabled: context.mode !== "flash",
-              is_plan_mode: context.mode === "pro" || context.mode === "ultra",
-              subagent_enabled: context.mode === "ultra",
-              reasoning_effort:
-                context.reasoning_effort ??
-                (context.mode === "ultra"
-                  ? "high"
-                  : context.mode === "pro"
-                    ? "medium"
-                    : context.mode === "thinking"
-                      ? "low"
-                      : undefined),
-              thread_id: threadId,
-            },
+          config: {
+            recursion_limit: 1000,
           },
-        );
+          context: submitContext,
+          stream_mode: ["values", "messages-tuple", "custom"],
+          stream_subgraphs: true,
+          stream_resumable: true,
+        };
+
+        if (thread.isLoading) {
+          const result = await submitEnqueuedRun(threadId, runPayload);
+          if (result.runId) {
+            pendingJoinRunsRef.current = [
+              ...pendingJoinRunsRef.current,
+              result.runId,
+            ];
+            if (result.kind === "queued") {
+              setQueuedRunCount((count) => adjustQueueDepth(count, 1));
+            }
+            void drainPendingJoinRuns();
+          }
+        } else {
+          await thread.submit(
+            {
+              messages: runPayload.input.messages,
+            },
+            {
+              threadId: threadId,
+              streamSubgraphs: true,
+              streamResumable: true,
+              multitaskStrategy: "enqueue",
+              config: runPayload.config,
+              context: submitContext,
+            },
+          );
+        }
         void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
       } catch (error) {
         setOptimisticMessages([]);
         setIsUploading(false);
         throw error;
-      } finally {
-        sendInFlightRef.current = false;
       }
     },
-    [thread, t.uploads.uploadingFiles, context, queryClient, humanMessageCount],
+    [
+      thread,
+      t.uploads.uploadingFiles,
+      context,
+      queryClient,
+      humanMessageCount,
+      isUploading,
+      drainPendingJoinRuns,
+    ],
   );
 
   // Cache the latest thread messages in a ref to compare against incoming history messages for deduplication,
@@ -671,6 +795,7 @@ export function useThreadStream({
     pendingUsageMessages,
     sendMessage,
     isUploading,
+    queuedRunCount,
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,

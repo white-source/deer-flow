@@ -95,3 +95,12 @@ class TestThreadStateAnnotations:
         """Sanity check that existing reducer wiring is preserved."""
         hints = get_type_hints(ThreadState, include_extras=True)
         assert merge_artifacts in hints["artifacts"].__metadata__
+
+
+def test_todo_middleware_preserves_todos_reducer():
+    """TodoMiddleware must reuse ThreadState.todos to avoid LangGraph channel conflicts."""
+    from deerflow.agents.middlewares.todo_middleware import TodoMiddlewareState
+
+    middleware_hints = get_type_hints(TodoMiddlewareState, include_extras=True)
+    thread_hints = get_type_hints(ThreadState, include_extras=True)
+    assert middleware_hints["todos"] == thread_hints["todos"]
