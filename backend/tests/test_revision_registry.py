@@ -31,7 +31,25 @@ async def test_one_active_revision_per_root_run(registry: RevisionRegistry):
     latest = await registry.get_active_revision(root.root_run_id)
     assert latest is not None
     assert latest.revision_id == r2.revision_id
-    assert latest.checkpoint_namespace == f"run:{root.root_run_id}:rev:{r2.revision_id}"
+    # Child inherits parent's checkpoint namespace
+    assert latest.checkpoint_namespace == r1.checkpoint_namespace
+
+
+@pytest.mark.asyncio
+async def test_forked_revision_inherits_parent_checkpoint_namespace(registry: RevisionRegistry):
+    """Child revision must share its parent's checkpoint namespace so graph
+    execution continues from the parent's last checkpoint rather than starting
+    from an empty state."""
+    root = await registry.create_root_run(thread_id="t1", created_by_message_id="m1")
+    parent = await registry.create_initial_revision(root.root_run_id)
+
+    child = await registry.fork_revision(
+        parent_revision_id=parent.revision_id, reason="inject"
+    )
+
+    assert child.checkpoint_namespace == parent.checkpoint_namespace
+    assert child.parent_revision_id == parent.revision_id
+    assert child.supersedes_revision_id == parent.revision_id
 
 
 @pytest.mark.asyncio

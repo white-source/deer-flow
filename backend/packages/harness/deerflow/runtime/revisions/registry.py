@@ -84,7 +84,7 @@ class RevisionRegistry:
             supersedes_revision_id=parent.revision_id,
             status=RevisionStatus.pending.value,
             execution_mode=parent.execution_mode,
-            checkpoint_namespace=self._checkpoint_namespace(parent.root_run_id, revision_id),
+            checkpoint_namespace=parent.checkpoint_namespace,
             reason=reason,
             is_active=False,
         )
