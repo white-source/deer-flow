@@ -330,6 +330,17 @@ async def start_run(
                 detail=f"Model {model_name!r} is not in the configured model allowlist",
             )
 
+    # Resolve revision coordinates early so they can be injected into
+    # both run metadata (for cancel linkage) and graph config (for
+    # checkpoint namespace isolation).
+    context = getattr(body, "context", None) or {}
+    root_run_id = context.get("root_run_id")
+    revision_id = context.get("revision_id")
+    if _revision_runtime_enabled() and isinstance(root_run_id, str) and root_run_id and isinstance(revision_id, str) and revision_id:
+        body.metadata = body.metadata or {}
+        body.metadata.setdefault("revision_id", revision_id)
+        body.metadata.setdefault("root_run_id", root_run_id)
+
     try:
         record = await run_mgr.create_or_reject(
             thread_id,
@@ -367,12 +378,7 @@ async def start_run(
     graph_input = normalize_input(body.input)
     config = build_run_config(thread_id, body.config, body.metadata, assistant_id=body.assistant_id)
 
-    # Revision runtime compatibility (feature-flagged): when callers provide
-    # explicit revision coordinates, isolate checkpoints under the revision
-    # namespace. Legacy runtime remains the default path when disabled.
-    context = getattr(body, "context", None) or {}
-    root_run_id = context.get("root_run_id")
-    revision_id = context.get("revision_id")
+    # Revision runtime compatibility (feature-flagged)
     if _revision_runtime_enabled() and isinstance(root_run_id, str) and root_run_id and isinstance(revision_id, str) and revision_id:
         config.setdefault("configurable", {}).setdefault(
             "checkpoint_ns",
