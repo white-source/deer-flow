@@ -22,7 +22,9 @@ async def test_enqueue_returns_position():
     q = ThreadRunQueue(max_depth=10)
     assert await q.enqueue("thread-a", "run-1") == 1
     assert await q.enqueue("thread-a", "run-2") == 2
+    assert await q.enqueue("thread-b", "run-1") == 1
     assert await q.position("thread-a", "run-2") == 2
+    assert await q.position("thread-b", "run-1") == 1
 
 
 @pytest.mark.anyio

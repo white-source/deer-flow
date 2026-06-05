@@ -36,6 +36,8 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
 markers = [
     "no_auto_user: disable the conftest autouse contextvar fixture for this test",
 ]
