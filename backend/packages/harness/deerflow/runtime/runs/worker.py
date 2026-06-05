@@ -45,6 +45,14 @@ logger = logging.getLogger(__name__)
 _VALID_LG_MODES = {"values", "updates", "checkpoints", "tasks", "debug", "messages", "custom"}
 
 
+def _resolve_checkpoint_namespace(config: dict[str, Any]) -> str:
+    configurable = config.get("configurable")
+    if not isinstance(configurable, dict):
+        return ""
+    checkpoint_ns = configurable.get("checkpoint_ns")
+    return checkpoint_ns if isinstance(checkpoint_ns, str) else ""
+
+
 def _build_runtime_context(
     thread_id: str,
     run_id: str,
@@ -150,6 +158,7 @@ async def run_agent(
     pre_run_checkpoint_id: str | None = None
     pre_run_snapshot: dict[str, Any] | None = None
     snapshot_capture_failed = False
+    checkpoint_ns = _resolve_checkpoint_namespace(config)
 
     journal = None
 
@@ -184,7 +193,7 @@ async def run_agent(
         # Snapshot the latest pre-run checkpoint so rollback can restore it.
         if checkpointer is not None:
             try:
-                config_for_check = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+                config_for_check = {"configurable": {"thread_id": thread_id, "checkpoint_ns": checkpoint_ns}}
                 ckpt_tuple = await checkpointer.aget_tuple(config_for_check)
                 if ckpt_tuple is not None:
                     ckpt_config = getattr(ckpt_tuple, "config", {}).get("configurable", {})
@@ -406,7 +415,7 @@ async def run_agent(
         # Sync title from checkpoint to threads_meta.display_name
         if checkpointer is not None and thread_store is not None:
             try:
-                ckpt_config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+                ckpt_config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": checkpoint_ns}}
                 ckpt_tuple = await checkpointer.aget_tuple(ckpt_config)
                 if ckpt_tuple is not None:
                     ckpt = getattr(ckpt_tuple, "checkpoint", {}) or {}

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -33,10 +34,16 @@ from deerflow.runtime import (
     UnsupportedStrategyError,
     run_agent,
 )
+from deerflow.runtime.revisions.coordinator import build_checkpoint_namespace
 from deerflow.runtime.runs.dispatcher import LaunchContext
 from deerflow.runtime.runs.naming import resolve_root_run_name
 
 logger = logging.getLogger(__name__)
+
+
+def _revision_runtime_enabled() -> bool:
+    value = os.getenv("DEER_FLOW_REVISION_RUNTIME_ENABLED", "0").strip().lower()
+    return value in {"1", "true", "yes", "on"}
 
 
 # ---------------------------------------------------------------------------
@@ -359,6 +366,18 @@ async def start_run(
     agent_factory = resolve_agent_factory(body.assistant_id)
     graph_input = normalize_input(body.input)
     config = build_run_config(thread_id, body.config, body.metadata, assistant_id=body.assistant_id)
+
+    # Revision runtime compatibility (feature-flagged): when callers provide
+    # explicit revision coordinates, isolate checkpoints under the revision
+    # namespace. Legacy runtime remains the default path when disabled.
+    context = getattr(body, "context", None) or {}
+    root_run_id = context.get("root_run_id")
+    revision_id = context.get("revision_id")
+    if _revision_runtime_enabled() and isinstance(root_run_id, str) and root_run_id and isinstance(revision_id, str) and revision_id:
+        config.setdefault("configurable", {}).setdefault(
+            "checkpoint_ns",
+            build_checkpoint_namespace(root_run_id, revision_id),
+        )
 
     # Merge DeerFlow-specific context overrides into both ``configurable`` and ``context``.
     # The ``context`` field is a custom extension for the langgraph-compat layer

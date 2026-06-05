@@ -141,10 +141,7 @@ class RunManager:
     async def has_inflight(self, thread_id: str) -> bool:
         """Return True when *thread_id* has a pending or running run."""
         async with self._lock:
-            return any(
-                r.thread_id == thread_id and r.status in (RunStatus.pending, RunStatus.running)
-                for r in self._runs.values()
-            )
+            return any(r.thread_id == thread_id and r.status in (RunStatus.pending, RunStatus.running) for r in self._runs.values())
 
     @staticmethod
     def _store_put_payload(record: RunRecord, *, error: str | None = None) -> dict[str, Any]:
@@ -676,11 +673,6 @@ class RunManager:
         if recovered:
             logger.warning("Recovered %d orphaned inflight run(s) as error", len(recovered))
         return recovered
-
-    async def has_inflight(self, thread_id: str) -> bool:
-        """Return ``True`` if *thread_id* has a pending or running run."""
-        async with self._lock:
-            return any(r.thread_id == thread_id and r.status in (RunStatus.pending, RunStatus.running) for r in self._runs.values())
 
     async def cleanup(self, run_id: str, *, delay: float = 300) -> None:
         """Remove a run record after an optional delay."""

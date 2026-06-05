@@ -20,6 +20,7 @@ from app.gateway.routers import (
     mcp,
     memory,
     models,
+    revisions,
     runs,
     skills,
     suggestions,
@@ -304,6 +305,10 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
                 "description": "LangGraph Platform-compatible runs lifecycle (create, stream, cancel)",
             },
             {
+                "name": "revisions",
+                "description": "Revision lifecycle operations (resume, inject, and active revision switch)",
+            },
+            {
                 "name": "health",
                 "description": "Health check and system status endpoints",
             },
@@ -374,6 +379,9 @@ This gateway provides runtime endpoints for agent runs plus custom endpoints for
 
     # Stateless Runs API (stream/wait without a pre-existing thread)
     app.include_router(runs.router)
+
+    # Revisions API (resume/inject/switch active revision)
+    app.include_router(revisions.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict[str, str]:

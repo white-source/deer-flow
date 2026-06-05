@@ -15,6 +15,27 @@ from .schemas import RunStatus
 logger = logging.getLogger(__name__)
 
 
+def _is_superseded_status(value: Any) -> bool:
+    return isinstance(value, str) and value.lower() == "superseded"
+
+
+def _record_is_superseded(record: RunRecord, launch_ctx: LaunchContext | None) -> bool:
+    if _is_superseded_status(record.metadata.get("revision_status")):
+        return True
+    if launch_ctx is None:
+        return False
+
+    configurable = launch_ctx.config.get("configurable")
+    if isinstance(configurable, dict) and _is_superseded_status(configurable.get("revision_status")):
+        return True
+
+    context = launch_ctx.config.get("context")
+    if isinstance(context, dict) and _is_superseded_status(context.get("revision_status")):
+        return True
+
+    return False
+
+
 @dataclass
 class LaunchContext:
     """Everything needed to start ``run_agent`` for a deferred run."""
@@ -71,6 +92,15 @@ class RunDispatcher:
     async def submit(self, record: RunRecord, launch_ctx: LaunchContext) -> None:
         """Store launch context and start execution when the thread is idle."""
         self._launch_contexts[record.run_id] = launch_ctx
+        if _record_is_superseded(record, launch_ctx):
+            logger.info("Skipping superseded run %s on thread %s", record.run_id, record.thread_id)
+            self._launch_contexts.pop(record.run_id, None)
+            await self.run_manager.set_status(
+                record.run_id,
+                RunStatus.interrupted,
+                error="Run superseded before dispatch",
+            )
+            return
         if record.status == RunStatus.queued:
             return
 
@@ -131,6 +161,15 @@ class RunDispatcher:
             launch_ctx = self._launch_contexts.get(next_run_id)
             if launch_ctx is None:
                 logger.warning("Missing launch context for queued run %s", next_run_id)
+                continue
+            if _record_is_superseded(record, launch_ctx):
+                logger.info("Skipping queued superseded run %s on thread %s", next_run_id, thread_id)
+                self._launch_contexts.pop(next_run_id, None)
+                await self.run_manager.set_status(
+                    next_run_id,
+                    RunStatus.interrupted,
+                    error="Queued run superseded before dispatch",
+                )
                 continue
 
             async with self._thread_lock(thread_id):

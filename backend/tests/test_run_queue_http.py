@@ -13,7 +13,6 @@ from starlette.testclient import TestClient
 
 from deerflow.runtime.runs.schemas import RunStatus
 
-
 _MINIMAL_CONFIG_YAML = """\
 log_level: info
 models:
@@ -99,8 +98,13 @@ def _run_body(**overrides) -> dict[str, Any]:
 
 def _install_hold_launch(app, hold: threading.Event, release: threading.Event):
     dispatcher = app.state.run_dispatcher
+    captured: dict[str, Any] = {}
 
     async def hold_launch(record, launch_ctx):
+        configurable = launch_ctx.config.get("configurable")
+        if isinstance(configurable, dict):
+            captured["checkpoint_ns"] = configurable.get("checkpoint_ns")
+
         async def _work() -> None:
             await launch_ctx.run_mgr.set_status(record.run_id, RunStatus.running)
             hold.set()
@@ -112,6 +116,7 @@ def _install_hold_launch(app, hold: threading.Event, release: threading.Event):
         record.task = asyncio.create_task(_work())
 
     dispatcher.launch = hold_launch
+    return captured
 
 
 @pytest.mark.no_auto_user
@@ -172,5 +177,61 @@ def test_reject_strategy_still_returns_409(isolated_app):
             headers={"X-CSRF-Token": csrf},
         )
         assert second.status_code == 409
+
+        release.set()
+
+
+@pytest.mark.no_auto_user
+def test_revision_context_sets_checkpoint_namespace(isolated_app, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DEER_FLOW_REVISION_RUNTIME_ENABLED", "1")
+    hold = threading.Event()
+    release = threading.Event()
+
+    with TestClient(isolated_app) as client:
+        captured = _install_hold_launch(isolated_app, hold, release)
+        csrf = _register_user(client)
+        thread_id = _create_thread(client, csrf)
+
+        response = client.post(
+            f"/api/threads/{thread_id}/runs",
+            json=_run_body(
+                context={
+                    "root_run_id": "root-1",
+                    "revision_id": "rev-2",
+                }
+            ),
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert response.status_code == 200, response.text
+        assert hold.wait(timeout=5), "run did not reach running state"
+        assert captured.get("checkpoint_ns") == "run:root-1:rev:rev-2"
+
+        release.set()
+
+
+@pytest.mark.no_auto_user
+def test_revision_context_keeps_legacy_namespace_when_flag_disabled(isolated_app, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DEER_FLOW_REVISION_RUNTIME_ENABLED", "0")
+    hold = threading.Event()
+    release = threading.Event()
+
+    with TestClient(isolated_app) as client:
+        captured = _install_hold_launch(isolated_app, hold, release)
+        csrf = _register_user(client)
+        thread_id = _create_thread(client, csrf)
+
+        response = client.post(
+            f"/api/threads/{thread_id}/runs",
+            json=_run_body(
+                context={
+                    "root_run_id": "root-1",
+                    "revision_id": "rev-2",
+                }
+            ),
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert response.status_code == 200, response.text
+        assert hold.wait(timeout=5), "run did not reach running state"
+        assert captured.get("checkpoint_ns") in (None, "")
 
         release.set()

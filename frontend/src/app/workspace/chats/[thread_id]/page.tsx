@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { ArtifactTrigger } from "@/components/workspace/artifacts";
@@ -16,6 +16,14 @@ import {
   MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
 } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
+import {
+  type BackgroundRunItem,
+  BackgroundRunList,
+} from "@/components/workspace/revisions/background-run-list";
+import {
+  type RevisionTimelineItem,
+  RevisionTimeline,
+} from "@/components/workspace/revisions/revision-timeline";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { TokenUsageIndicator } from "@/components/workspace/token-usage-indicator";
@@ -29,6 +37,65 @@ import { threadTokenUsageToTokenUsage } from "@/core/threads/token-usage";
 import { textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
+
+function toNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function toRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+function toArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function parseRevisionTimeline(source: unknown): RevisionTimelineItem[] {
+  return toArray(source)
+    .map((item) => toRecord(item))
+    .filter((item): item is Record<string, unknown> => item !== undefined)
+    .map((item) => {
+      const revisionId =
+        toNonEmptyString(item.revision_id) ?? toNonEmptyString(item.revisionId);
+      if (!revisionId) {
+        return undefined;
+      }
+      return {
+        revisionId,
+        label: toNonEmptyString(item.label) ?? revisionId,
+        status:
+          toNonEmptyString(item.status) ??
+          toNonEmptyString(item.execution_status) ??
+          "unknown",
+      };
+    })
+    .filter((item): item is RevisionTimelineItem => item !== undefined);
+}
+
+function parseBackgroundRuns(source: unknown): BackgroundRunItem[] {
+  return toArray(source)
+    .map((item) => toRecord(item))
+    .filter((item): item is Record<string, unknown> => item !== undefined)
+    .map((item) => {
+      const runId =
+        toNonEmptyString(item.root_run_id) ??
+        toNonEmptyString(item.rootRunId) ??
+        toNonEmptyString(item.run_id) ??
+        toNonEmptyString(item.runId);
+      if (!runId) {
+        return undefined;
+      }
+      return {
+        runId,
+        label: toNonEmptyString(item.label) ?? runId,
+        status: toNonEmptyString(item.status) ?? "unknown",
+      };
+    })
+    .filter((item): item is BackgroundRunItem => item !== undefined);
+}
 
 export default function ChatPage() {
   const { t } = useI18n();
@@ -126,6 +193,51 @@ export default function ChatPage() {
     ? localSettings.tokenUsage.inlineMode
     : "off";
   const hasTodos = (thread.values.todos?.length ?? 0) > 0;
+  const latestMessageAdditionalKwargs = useMemo(() => {
+    const messages = thread.messages;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      const additionalKwargs = toRecord(
+        (message as { additional_kwargs?: unknown }).additional_kwargs,
+      );
+      if (additionalKwargs) {
+        return additionalKwargs;
+      }
+    }
+    return undefined;
+  }, [thread.messages]);
+  const revisionTimeline = useMemo(() => {
+    const fromValues = parseRevisionTimeline(
+      thread.values.revisions ?? thread.values.revision_timeline,
+    );
+    if (fromValues.length > 0) {
+      return fromValues;
+    }
+    return parseRevisionTimeline(
+      latestMessageAdditionalKwargs?.revisions ??
+        latestMessageAdditionalKwargs?.revision_timeline,
+    );
+  }, [latestMessageAdditionalKwargs, thread.values]);
+  const backgroundRuns = useMemo(() => {
+    const fromValues = parseBackgroundRuns(
+      thread.values.background_runs ?? thread.values.backgroundRuns,
+    );
+    if (fromValues.length > 0) {
+      return fromValues;
+    }
+    return parseBackgroundRuns(
+      latestMessageAdditionalKwargs?.background_runs ??
+        latestMessageAdditionalKwargs?.backgroundRuns,
+    );
+  }, [latestMessageAdditionalKwargs, thread.values]);
+  const activeRevisionId = useMemo(
+    () =>
+      toNonEmptyString(thread.values.active_revision_id) ??
+      toNonEmptyString(thread.values.activeRevisionId) ??
+      toNonEmptyString(latestMessageAdditionalKwargs?.active_revision_id) ??
+      toNonEmptyString(latestMessageAdditionalKwargs?.activeRevisionId),
+    [latestMessageAdditionalKwargs, thread.values],
+  );
 
   return (
     <ThreadContext.Provider value={{ thread, isMock }}>
@@ -261,6 +373,13 @@ export default function ChatPage() {
               </div>
             </div>
           </main>
+          <aside className="border-border/60 bg-background/40 hidden w-72 shrink-0 border-l p-3 lg:flex lg:flex-col lg:gap-4">
+            <RevisionTimeline
+              revisions={revisionTimeline}
+              activeRevisionId={activeRevisionId}
+            />
+            <BackgroundRunList runs={backgroundRuns} />
+          </aside>
         </div>
       </ChatBox>
     </ThreadContext.Provider>

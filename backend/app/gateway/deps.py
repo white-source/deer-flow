@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from fastapi import FastAPI, HTTPException, Request
 from langgraph.types import Checkpointer
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from app.gateway.auth.repositories.sqlite import SQLiteUserRepository
     from deerflow.persistence.thread_meta.base import ThreadMetaStore
     from deerflow.runtime import RunRecord
+    from deerflow.runtime.revisions.registry import RevisionRegistry
 
 
 T = TypeVar("T")
@@ -140,14 +141,18 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         if sf is not None:
             from deerflow.persistence.feedback import FeedbackRepository
             from deerflow.persistence.run import RunRepository
+            from deerflow.persistence.run_revision.sql import RunRevisionRepository
+            from deerflow.runtime.revisions.registry import RevisionRegistry
 
             app.state.run_store = RunRepository(sf)
             app.state.feedback_repo = FeedbackRepository(sf)
+            app.state.revision_registry = RevisionRegistry(RunRevisionRepository(sf))
         else:
             from deerflow.runtime.runs.store.memory import MemoryRunStore
 
             app.state.run_store = MemoryRunStore()
             app.state.feedback_repo = None
+            app.state.revision_registry = None
 
         from deerflow.persistence.thread_meta import make_thread_store
 
@@ -162,10 +167,9 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         app.state.run_event_store = make_run_event_store(run_events_config)
 
         # RunManager with store backing for persistence
+        from app.gateway import services
         from deerflow.runtime.runs.dispatcher import RunDispatcher
         from deerflow.runtime.runs.queue import ThreadRunQueue
-
-        from app.gateway import services
 
         run_queue = ThreadRunQueue(max_depth=50)
         app.state.run_queue = run_queue
@@ -222,6 +226,7 @@ get_checkpointer: Callable[[Request], Checkpointer] = _require("checkpointer", "
 get_run_event_store: Callable[[Request], RunEventStore] = _require("run_event_store", "Run event store")
 get_feedback_repo: Callable[[Request], FeedbackRepository] = _require("feedback_repo", "Feedback")
 get_run_store: Callable[[Request], RunStore] = _require("run_store", "Run store")
+get_revision_registry: Callable[[Request], RevisionRegistry] = _require("revision_registry", "Revision registry")
 
 
 def get_store(request: Request):

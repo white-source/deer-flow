@@ -12,6 +12,7 @@ import { fetch } from "../api/fetcher";
 import { getBackendBaseURL } from "../config";
 import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
+import { injectRevision, resumeRevision } from "../revisions/api";
 import type { LocalSettings } from "../settings";
 import { useUpdateSubtask } from "../tasks/context";
 import type { UploadedFileInfo } from "../uploads";
@@ -54,6 +55,20 @@ type SendMessageOptions = {
 
 function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === "string" && value.length > 0;
+}
+
+function toNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+export function resolveRevisionAction(
+  additionalKwargs?: Record<string, unknown>,
+): { intent: string | undefined; activeRevisionId: string | undefined } {
+  const intent = toNonEmptyString(additionalKwargs?.intent);
+  const activeRevisionId =
+    toNonEmptyString(additionalKwargs?.activeRevisionId) ??
+    toNonEmptyString(additionalKwargs?.active_revision_id);
+  return { intent, activeRevisionId };
 }
 
 function messageIdentity(message: Message): string | undefined {
@@ -684,26 +699,24 @@ export function useThreadStream({
           thread_id: threadId,
         };
 
+        const inputMessage: Message = {
+          type: "human",
+          content: [
+            {
+              type: "text",
+              text,
+            },
+          ],
+          additional_kwargs: {
+            ...options?.additionalKwargs,
+            ...(filesForSubmit.length > 0 ? { files: filesForSubmit } : {}),
+          },
+        };
+
         const runPayload = {
           assistant_id: "lead_agent",
           input: {
-            messages: [
-              {
-                type: "human",
-                content: [
-                  {
-                    type: "text",
-                    text,
-                  },
-                ],
-                additional_kwargs: {
-                  ...options?.additionalKwargs,
-                  ...(filesForSubmit.length > 0
-                    ? { files: filesForSubmit }
-                    : {}),
-                },
-              },
-            ],
+            messages: [inputMessage],
           },
           config: {
             recursion_limit: 1000,
@@ -714,7 +727,17 @@ export function useThreadStream({
           stream_resumable: true,
         };
 
-        if (thread.isLoading) {
+        const { intent, activeRevisionId } = resolveRevisionAction(
+          options?.additionalKwargs,
+        );
+
+        if (activeRevisionId && intent === "inject") {
+          await injectRevision(activeRevisionId, text);
+          setOptimisticMessages([]);
+        } else if (activeRevisionId && intent === "resume") {
+          await resumeRevision(activeRevisionId);
+          setOptimisticMessages([]);
+        } else if (thread.isLoading) {
           const result = await submitEnqueuedRun(threadId, runPayload);
           if (result.runId) {
             pendingJoinRunsRef.current = [

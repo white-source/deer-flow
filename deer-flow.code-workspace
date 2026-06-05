@@ -13,7 +13,8 @@
         "packageManager": "ms-python.python:pip",
         "workspace": "deer-flow"
       }
-    ]
+    ],
+    "llamit.model": "qwen3:8b"
   },
   "launch": {
     "version": "0.2.0",

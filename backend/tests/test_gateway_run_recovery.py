@@ -28,8 +28,9 @@ class _FakeRunManager:
     recovered_runs = [SimpleNamespace(run_id="run-1", thread_id="thread-1")]
     latest_by_thread: dict[str, list[SimpleNamespace]] = {}
 
-    def __init__(self, *, store):
+    def __init__(self, *, store, queue=None):
         self.store = store
+        self.queue = queue
         self.reconcile_calls: list[dict] = []
         self.list_by_thread_calls: list[dict] = []
         _FakeRunManager.instances.append(self)
@@ -41,6 +42,12 @@ class _FakeRunManager:
     async def list_by_thread(self, thread_id: str, *, user_id=None, limit: int = 100):
         self.list_by_thread_calls.append({"thread_id": thread_id, "user_id": user_id, "limit": limit})
         return self.latest_by_thread.get(thread_id, self.recovered_runs[:limit])
+
+    async def notify_run_terminal(self, *_args, **_kwargs) -> None:
+        return None
+
+    def set_run_terminal_handler(self, *_args, **_kwargs) -> None:
+        return None
 
 
 class _FakeThreadStore:

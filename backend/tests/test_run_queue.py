@@ -6,6 +6,7 @@ import asyncio
 
 import pytest
 
+from deerflow.runtime.revisions.coordinator import build_checkpoint_namespace
 from deerflow.runtime.runs.dispatcher import LaunchContext
 from deerflow.runtime.runs.manager import RunManager
 from deerflow.runtime.runs.queue import ThreadRunQueue
@@ -15,6 +16,10 @@ from deerflow.runtime.runs.schemas import RunStatus
 def test_run_status_includes_queued():
     assert RunStatus.queued == "queued"
     assert "queued" in {s.value for s in RunStatus}
+
+
+def test_build_checkpoint_namespace_for_revision():
+    assert build_checkpoint_namespace("root-1", "rev-2") == "run:root-1:rev:rev-2"
 
 
 @pytest.mark.anyio
@@ -94,27 +99,33 @@ async def test_dispatcher_runs_queued_runs_serially_per_thread():
 
     try:
         first = await mgr.create_or_reject("thread-1", multitask_strategy="enqueue")
-        await dispatcher.submit(first, LaunchContext(
-            bridge=None,
-            run_ctx=None,
-            run_mgr=mgr,
-            agent_factory=None,
-            graph_input={},
-            config={},
-            stream_modes=["values"],
-        ))
+        await dispatcher.submit(
+            first,
+            LaunchContext(
+                bridge=None,
+                run_ctx=None,
+                run_mgr=mgr,
+                agent_factory=None,
+                graph_input={},
+                config={},
+                stream_modes=["values"],
+            ),
+        )
 
         second = await mgr.create_or_reject("thread-1", multitask_strategy="enqueue")
         assert second.status == RunStatus.queued
-        await dispatcher.submit(second, LaunchContext(
-            bridge=None,
-            run_ctx=None,
-            run_mgr=mgr,
-            agent_factory=None,
-            graph_input={},
-            config={},
-            stream_modes=["values"],
-        ))
+        await dispatcher.submit(
+            second,
+            LaunchContext(
+                bridge=None,
+                run_ctx=None,
+                run_mgr=mgr,
+                agent_factory=None,
+                graph_input={},
+                config={},
+                stream_modes=["values"],
+            ),
+        )
 
         await asyncio.sleep(0.05)
         assert launched == [first.run_id]
@@ -126,4 +137,69 @@ async def test_dispatcher_runs_queued_runs_serially_per_thread():
     finally:
         for event in launch_events:
             event.set()
+        await dispatcher.stop()
+
+
+@pytest.mark.anyio
+async def test_dispatcher_skips_superseded_revision_runs():
+    from deerflow.runtime.runs.dispatcher import RunDispatcher
+
+    queue = ThreadRunQueue(max_depth=10)
+    mgr = RunManager(queue=queue)
+    launched: list[str] = []
+
+    async def fake_launch(record, _ctx):
+        launched.append(record.run_id)
+        record.status = RunStatus.running
+        record.status = RunStatus.success
+        await mgr.notify_run_terminal(record.thread_id, record.run_id)
+
+    dispatcher = RunDispatcher(workers=1, queue=queue, run_manager=mgr, launch=fake_launch)
+    await dispatcher.start()
+    try:
+        superseded = await mgr.create_or_reject(
+            "thread-1",
+            multitask_strategy="enqueue",
+            metadata={"revision_status": "superseded"},
+        )
+        await dispatcher.submit(
+            superseded,
+            LaunchContext(
+                bridge=None,
+                run_ctx=None,
+                run_mgr=mgr,
+                agent_factory=None,
+                graph_input={},
+                config={"context": {"revision_status": "superseded"}},
+                stream_modes=["values"],
+            ),
+        )
+
+        await asyncio.sleep(0.05)
+        assert launched == []
+
+        refreshed = await mgr.get(superseded.run_id)
+        assert refreshed is not None
+        assert refreshed.status == RunStatus.interrupted
+
+        normal = await mgr.create_or_reject(
+            "thread-1",
+            multitask_strategy="enqueue",
+        )
+        await dispatcher.submit(
+            normal,
+            LaunchContext(
+                bridge=None,
+                run_ctx=None,
+                run_mgr=mgr,
+                agent_factory=None,
+                graph_input={},
+                config={},
+                stream_modes=["values"],
+            ),
+        )
+
+        await asyncio.sleep(0.05)
+        assert launched == [normal.run_id]
+    finally:
         await dispatcher.stop()
