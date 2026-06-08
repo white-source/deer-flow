@@ -12,7 +12,7 @@ import { fetch } from "../api/fetcher";
 import { getBackendBaseURL } from "../config";
 import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
-import { injectRevision, resumeRevision } from "../revisions/api";
+import { cancelRun, injectRevision, resumeRevision } from "../revisions/api";
 import type { LocalSettings } from "../settings";
 import { useUpdateSubtask } from "../tasks/context";
 import type { UploadedFileInfo } from "../uploads";
@@ -211,6 +211,7 @@ export function useThreadStream({
   const threadIdRef = useRef<string | null>(threadId ?? null);
   const startedRef = useRef(false);
   const pendingJoinRunsRef = useRef<string[]>([]);
+  const activeRunIdRef = useRef<string | null>(null);
   const drainingJoinRunsRef = useRef(false);
   const drainPendingJoinRunsRef = useRef<() => Promise<void>>(() =>
     Promise.resolve(),
@@ -250,6 +251,7 @@ export function useThreadStream({
 
   const handleStreamStart = useCallback((_threadId: string, _runId: string) => {
     threadIdRef.current = _threadId;
+    activeRunIdRef.current = _runId;
     if (!startedRef.current) {
       listeners.current.onStart?.(_threadId, _runId);
       startedRef.current = true;
@@ -487,6 +489,13 @@ export function useThreadStream({
     prevHumanMsgCountRef.current =
       latestMessageCountsRef.current.humanMessageCount;
   }, [threadId]);
+
+  // Clear active run tracking when the stream stops.
+  useEffect(() => {
+    if (!thread.isLoading) {
+      activeRunIdRef.current = null;
+    }
+  }, [thread.isLoading]);
 
   // When streaming starts without a baseline (e.g. reconnection, run started
   // from another client, or page reload mid-stream), snapshot the current
@@ -731,7 +740,17 @@ export function useThreadStream({
           options?.additionalKwargs,
         );
 
-        if (activeRevisionId && intent === "inject") {
+        if (intent === "cancel") {
+          // Cancel the active run directly — do NOT create a new queued run.
+          // This prevents the cancel message itself from waiting in the queue
+          // behind the running run.
+          const activeRunId = activeRunIdRef.current;
+          if (activeRunId) {
+            await cancelRun(threadId, activeRunId);
+          }
+          void thread.stop();
+          setOptimisticMessages([]);
+        } else if (activeRevisionId && intent === "inject") {
           await injectRevision(activeRevisionId, text);
           setOptimisticMessages([]);
         } else if (activeRevisionId && intent === "resume") {
@@ -822,6 +841,7 @@ export function useThreadStream({
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,
+    activeRunIdRef,
   } as const;
 }
 

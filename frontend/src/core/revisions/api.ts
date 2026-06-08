@@ -44,6 +44,19 @@ export async function injectRevision(
   return readRevisionResponse(response, "Failed to inject revision.");
 }
 
+export async function cancelRun(
+  threadId: string,
+  runId: string,
+): Promise<RevisionActionResponse> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/runs/${encodeURIComponent(runId)}/cancel`,
+    {
+      method: "POST",
+    },
+  );
+  return readRevisionResponse(response, "Failed to cancel run.");
+}
+
 export async function switchActiveRevision(
   threadId: string,
   revisionId: string,
