@@ -50,6 +50,7 @@ def test_inject_creates_new_revision():
             revision_id="rev-2",
             supersedes_revision_id="rev-1",
             status="pending",
+            checkpoint_namespace="run:root-1:rev:rev-2",
         )
     )
 
@@ -62,7 +63,10 @@ def test_inject_creates_new_revision():
     assert body["revision_id"] == "rev-2"
     assert body["superseded_revision_id"] == "rev-1"
     assert body["status"] == "pending"
-    registry.fork_revision.assert_awaited_once_with(parent_revision_id="rev-1", reason="switch plan")
+    assert body["checkpoint_namespace"] == "run:root-1:rev:rev-2"
+    registry.fork_revision.assert_awaited_once_with(
+        parent_revision_id="rev-1", reason="switch plan", mode="continue"
+    )
 
 
 def test_inject_returns_404_when_revision_missing():

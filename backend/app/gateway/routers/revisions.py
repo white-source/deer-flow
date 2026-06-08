@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api", tags=["revisions"])
 
 class InjectRequest(BaseModel):
     instruction: str = Field(default="inject", min_length=1)
+    mode: str = Field(default="continue", pattern="^(replace|continue)$")
 
 
 class SwitchActiveRequest(BaseModel):
@@ -44,13 +45,16 @@ async def inject_revision(revision_id: str, body: InjectRequest, request: Reques
     """Fork a new revision and supersede the supplied revision."""
     registry = get_revision_registry(request)
     try:
-        forked = await registry.fork_revision(parent_revision_id=revision_id, reason=body.instruction)
+        forked = await registry.fork_revision(
+            parent_revision_id=revision_id, reason=body.instruction, mode=body.mode
+        )
     except ValueError as exc:
         _map_registry_error(exc)
     return {
         "revision_id": forked.revision_id,
         "superseded_revision_id": forked.supersedes_revision_id,
         "status": forked.status,
+        "checkpoint_namespace": forked.checkpoint_namespace,
     }
 
 

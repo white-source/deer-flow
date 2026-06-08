@@ -79,3 +79,43 @@ async def test_set_active_revision_rejects_cross_root(registry: RevisionRegistry
             root_run_id=root2.root_run_id,
             revision_id=r1.revision_id,
         )
+
+
+@pytest.mark.asyncio
+async def test_fork_revision_replace_creates_independent_namespace(registry: RevisionRegistry):
+    """mode=replace: child gets a NEW independent checkpoint namespace."""
+    root = await registry.create_root_run(thread_id="t1", created_by_message_id="m1")
+    parent = await registry.create_initial_revision(root.root_run_id)
+
+    child = await registry.fork_revision(
+        parent_revision_id=parent.revision_id, reason="改查9月", mode="replace"
+    )
+
+    assert child.checkpoint_namespace != parent.checkpoint_namespace
+    assert child.checkpoint_namespace == f"run:{root.root_run_id}:rev:{child.revision_id}"
+
+
+@pytest.mark.asyncio
+async def test_fork_revision_continue_inherits_parent_namespace(registry: RevisionRegistry):
+    """mode=continue: child inherits parent's checkpoint namespace."""
+    root = await registry.create_root_run(thread_id="t1", created_by_message_id="m1")
+    parent = await registry.create_initial_revision(root.root_run_id)
+
+    child = await registry.fork_revision(
+        parent_revision_id=parent.revision_id, reason="没订过查凭证", mode="continue"
+    )
+
+    assert child.checkpoint_namespace == parent.checkpoint_namespace
+
+
+@pytest.mark.asyncio
+async def test_fork_revision_default_mode_is_continue(registry: RevisionRegistry):
+    """Default mode (not specified) behaves as continue (backward compatible)."""
+    root = await registry.create_root_run(thread_id="t1", created_by_message_id="m1")
+    parent = await registry.create_initial_revision(root.root_run_id)
+
+    child = await registry.fork_revision(
+        parent_revision_id=parent.revision_id, reason="no mode specified"
+    )
+
+    assert child.checkpoint_namespace == parent.checkpoint_namespace

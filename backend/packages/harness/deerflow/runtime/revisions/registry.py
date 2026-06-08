@@ -67,7 +67,7 @@ class RevisionRegistry:
             raise ValueError(f"revision not found after update: {revision_id}")
         return updated
 
-    async def fork_revision(self, *, parent_revision_id: str, reason: str) -> RevisionRecord:
+    async def fork_revision(self, *, parent_revision_id: str, reason: str, mode: str = "continue") -> RevisionRecord:
         parent = await self._repo.get_revision(parent_revision_id)
         if parent is None:
             raise ValueError(f"revision not found: {parent_revision_id}")
@@ -77,6 +77,11 @@ class RevisionRegistry:
         await self.transition_revision(parent.revision_id, RevisionStatus.superseded)
 
         revision_id = self._new_id("rev")
+        if mode == "replace":
+            checkpoint_namespace = self._checkpoint_namespace(parent.root_run_id, revision_id)
+        else:
+            checkpoint_namespace = parent.checkpoint_namespace
+
         child = await self._repo.create_revision(
             revision_id=revision_id,
             root_run_id=parent.root_run_id,
@@ -84,7 +89,7 @@ class RevisionRegistry:
             supersedes_revision_id=parent.revision_id,
             status=RevisionStatus.pending.value,
             execution_mode=parent.execution_mode,
-            checkpoint_namespace=parent.checkpoint_namespace,
+            checkpoint_namespace=checkpoint_namespace,
             reason=reason,
             is_active=False,
         )
