@@ -627,6 +627,18 @@ class RunManager:
                     r.updated_at = now
                     interrupted_records.append(r)
 
+            if multitask_strategy in ("interrupt", "rollback"):
+                # Also cancel all queued runs for this thread — they belong
+                # to superseded messages and should not execute after the
+                # new run starts.
+                for r in list(self._runs.values()):
+                    if r.thread_id == thread_id and r.status == RunStatus.queued:
+                        if self._queue is not None:
+                            await self._queue.remove(r.thread_id, r.run_id)
+                        r.status = RunStatus.interrupted
+                        r.updated_at = now
+                        interrupted_records.append(r)
+
             queued_for_enqueue = multitask_strategy == "enqueue" and initial_status == RunStatus.queued
 
         if queued_for_enqueue:

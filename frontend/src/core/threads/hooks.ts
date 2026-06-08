@@ -22,7 +22,6 @@ import { fetchThreadTokenUsage } from "./api";
 import {
   adjustQueueDepth,
   countQueuedRuns,
-  submitEnqueuedRun,
   THREAD_RUN_STREAM_MODES,
   waitUntilRunJoinable,
 } from "./run-queue";
@@ -756,18 +755,6 @@ export function useThreadStream({
         } else if (activeRevisionId && intent === "resume") {
           await resumeRevision(activeRevisionId);
           setOptimisticMessages([]);
-        } else if (thread.isLoading) {
-          const result = await submitEnqueuedRun(threadId, runPayload);
-          if (result.runId) {
-            pendingJoinRunsRef.current = [
-              ...pendingJoinRunsRef.current,
-              result.runId,
-            ];
-            if (result.kind === "queued") {
-              setQueuedRunCount((count) => adjustQueueDepth(count, 1));
-            }
-            void drainPendingJoinRuns();
-          }
         } else {
           await thread.submit(
             {
@@ -777,7 +764,7 @@ export function useThreadStream({
               threadId: threadId,
               streamSubgraphs: true,
               streamResumable: true,
-              multitaskStrategy: "enqueue",
+              multitaskStrategy: "interrupt",
               config: runPayload.config,
               context: submitContext,
             },
@@ -797,7 +784,6 @@ export function useThreadStream({
       queryClient,
       humanMessageCount,
       isUploading,
-      drainPendingJoinRuns,
     ],
   );
 
