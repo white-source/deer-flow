@@ -87,5 +87,3 @@ async def test_inject_default_mode_is_continue(client: httpx.AsyncClient, thread
         body = response.json()
         # Should NOT be a mode validation error
         assert "mode" not in str(body.get("detail", ""))
-
-

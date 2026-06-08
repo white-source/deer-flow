@@ -11,10 +11,12 @@ from fastapi.testclient import TestClient
 from app.gateway.routers import revisions
 
 
-def _make_app(registry):
+def _make_app(registry, run_manager=None):
     app = make_authed_test_app()
     app.include_router(revisions.router)
     app.state.revision_registry = registry
+    if run_manager is not None:
+        app.state.run_manager = run_manager
     return app
 
 
@@ -45,6 +47,8 @@ def test_resume_rejects_invalid_state_transition():
 
 def test_inject_creates_new_revision():
     registry = MagicMock()
+    registry._repo = MagicMock()
+    registry._repo.get_revision = AsyncMock(return_value=None)  # revision lookup fails → skip cancel
     registry.fork_revision = AsyncMock(
         return_value=SimpleNamespace(
             revision_id="rev-2",
@@ -54,7 +58,10 @@ def test_inject_creates_new_revision():
         )
     )
 
-    app = _make_app(registry)
+    run_mgr = MagicMock()
+    run_mgr.list_by_thread = AsyncMock(return_value=[])
+
+    app = _make_app(registry, run_manager=run_mgr)
     with TestClient(app) as client:
         response = client.post("/api/runs/rev-1/inject", json={"instruction": "switch plan"})
 
@@ -69,9 +76,14 @@ def test_inject_creates_new_revision():
 
 def test_inject_returns_404_when_revision_missing():
     registry = MagicMock()
+    registry._repo = MagicMock()
+    registry._repo.get_revision = AsyncMock(return_value=None)  # revision not found
     registry.fork_revision = AsyncMock(side_effect=ValueError("revision not found: rev-missing"))
 
-    app = _make_app(registry)
+    run_mgr = MagicMock()
+    run_mgr.list_by_thread = AsyncMock(return_value=[])
+
+    app = _make_app(registry, run_manager=run_mgr)
     with TestClient(app) as client:
         response = client.post("/api/runs/rev-missing/inject", json={"instruction": "switch plan"})
 
@@ -134,9 +146,12 @@ def test_switch_active_run_maps_set_active_errors_to_conflict():
 def test_inject_invalid_mode_returns_422():
     """Invalid mode value is rejected by Pydantic schema validation."""
     registry = MagicMock()
+    registry._repo = MagicMock()
     registry.fork_revision = AsyncMock()
 
-    app = _make_app(registry)
+    run_mgr = MagicMock()
+
+    app = _make_app(registry, run_manager=run_mgr)
     with TestClient(app) as client:
         response = client.post(
             "/api/runs/rev-1/inject",

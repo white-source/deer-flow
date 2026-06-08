@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.gateway.authz import require_permission
-from app.gateway.deps import get_revision_registry
+from app.gateway.deps import get_revision_registry, get_run_manager
+from deerflow.runtime.runs.schemas import RunStatus
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["revisions"])
 
@@ -42,12 +47,48 @@ async def resume_revision(revision_id: str, request: Request) -> dict:
 @router.post("/runs/{revision_id}/inject")
 @require_permission("runs", "create")
 async def inject_revision(revision_id: str, body: InjectRequest, request: Request) -> dict:
-    """Fork a new revision and supersede the supplied revision."""
+    """Fork a new revision and supersede the supplied revision.
+
+    Cancels any inflight runs on the parent revision before forking so
+    the old run does not continue executing alongside the new one.
+    """
     registry = get_revision_registry(request)
+    run_mgr = get_run_manager(request)
+
+    # Cancel any inflight runs belonging to the parent revision before
+    # forking, so the old graph execution stops and the queue advances.
+    parent = await registry._repo.get_revision(revision_id)
+    if parent is not None:
+        root_run = await registry._repo.get_root_run(parent.root_run_id)
+        if root_run is not None:
+            try:
+                runs = await run_mgr.list_by_thread(root_run.thread_id, limit=50)
+            except Exception:
+                runs = []
+            for run in runs:
+                run_revision_id = (run.metadata or {}).get("revision_id")
+                if run_revision_id == revision_id and run.status in {
+                    RunStatus.pending,
+                    RunStatus.running,
+                    RunStatus.queued,
+                }:
+                    try:
+                        await run_mgr.cancel(run.run_id)
+                        logger.info(
+                            "Cancelled inflight run %s for revision %s before inject",
+                            run.run_id,
+                            revision_id,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to cancel run %s for revision %s",
+                            run.run_id,
+                            revision_id,
+                            exc_info=True,
+                        )
+
     try:
-        forked = await registry.fork_revision(
-            parent_revision_id=revision_id, reason=body.instruction, mode=body.mode
-        )
+        forked = await registry.fork_revision(parent_revision_id=revision_id, reason=body.instruction, mode=body.mode)
     except ValueError as exc:
         _map_registry_error(exc)
     return {
