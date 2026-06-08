@@ -19,8 +19,8 @@ test.describe("Scenario 4: 垫词后打断 (mode=continue)", () => {
     ).toContainText("增值业务", { timeout: 10000 });
 
     // When: user injects with continue mode (补充信息)
-    await page.evaluate(() => {
-      window.__test_triggerRevisionAction?.({
+    await page.evaluate(async () => {
+      await window.__test_triggerRevisionAction?.({
         intent: "inject",
         revisionId: "rev-a",
         instruction: "我没订过啊，重点查凭证",

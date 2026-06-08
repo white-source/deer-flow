@@ -16,9 +16,7 @@ import pytest
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
-async def test_inject_replace_creates_independent_namespace(
-    client: httpx.AsyncClient, thread_id: str
-):
+async def test_inject_replace_creates_independent_namespace(client: httpx.AsyncClient, thread_id: str):
     """mode=replace: child revision has a NEW independent checkpoint namespace."""
     # Given: create a run to establish root_run + revision
     run_resp = await client.post(
@@ -61,9 +59,7 @@ async def test_inject_replace_creates_independent_namespace(
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
-async def test_inject_continue_inherits_parent_namespace(
-    client: httpx.AsyncClient, thread_id: str
-):
+async def test_inject_continue_inherits_parent_namespace(client: httpx.AsyncClient, thread_id: str):
     """mode=continue: child revision inherits parent's checkpoint namespace."""
     run_resp = await client.post(
         f"/api/threads/{thread_id}/runs",
@@ -79,9 +75,7 @@ async def test_inject_continue_inherits_parent_namespace(
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
-async def test_inject_default_mode_is_continue(
-    client: httpx.AsyncClient, thread_id: str
-):
+async def test_inject_default_mode_is_continue(client: httpx.AsyncClient, thread_id: str):
     """Not specifying mode = default to continue (backward compatible)."""
     response = await client.post(
         "/api/runs/rev-test/inject",
@@ -95,14 +89,3 @@ async def test_inject_default_mode_is_continue(
         assert "mode" not in str(body.get("detail", ""))
 
 
-@pytest.mark.e2e
-@pytest.mark.asyncio
-async def test_inject_invalid_mode_returns_422(client: httpx.AsyncClient):
-    """Invalid mode value is rejected with 422."""
-    response = await client.post(
-        "/api/runs/rev-test/inject",
-        json={"instruction": "test", "mode": "invalid"},
-    )
-    assert response.status_code == 422
-    body = response.json()
-    assert "mode" in str(body["detail"]).lower()

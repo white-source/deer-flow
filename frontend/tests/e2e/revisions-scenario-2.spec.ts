@@ -18,8 +18,8 @@ test.describe("Scenario 2: 修改任务参数 (mode=replace)", () => {
     ).toBeVisible({ timeout: 5000 });
 
     // When: simulate Talker recognizing intent="inject" with mode="replace"
-    await page.evaluate(() => {
-      window.__test_triggerRevisionAction?.({
+    await page.evaluate(async () => {
+      await window.__test_triggerRevisionAction?.({
         intent: "inject",
         revisionId: "rev-a",
         instruction: "不看8月，查9月话费",

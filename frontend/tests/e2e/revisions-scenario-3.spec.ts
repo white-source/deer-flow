@@ -13,8 +13,8 @@ test.describe("Scenario 3: 停止任务 (cancel → revision cancelled)", () => 
     await page.goto("/workspace/chats/thread-e2e-scenario-3");
 
     // When: cancel via test helper
-    await page.evaluate(() => {
-      window.__test_triggerRevisionAction?.({
+    await page.evaluate(async () => {
+      await window.__test_triggerRevisionAction?.({
         intent: "cancel",
         revisionId: "rev-a",
       });

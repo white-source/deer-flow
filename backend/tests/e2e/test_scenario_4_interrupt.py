@@ -16,9 +16,7 @@ import pytest
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
-async def test_interrupt_cancel_and_fork_continue_inherits_namespace(
-    client: httpx.AsyncClient, thread_id: str
-):
+async def test_interrupt_cancel_and_fork_continue_inherits_namespace(client: httpx.AsyncClient, thread_id: str):
     """After cancel, inject with mode=continue inherits checkpoint namespace."""
     # Given: create a run
     run_resp = await client.post(
@@ -33,9 +31,7 @@ async def test_interrupt_cancel_and_fork_continue_inherits_namespace(
     run_id = run_resp.json()["run_id"]
 
     # When: cancel the run
-    cancel_resp = await client.post(
-        f"/api/threads/{thread_id}/runs/{run_id}/cancel"
-    )
+    cancel_resp = await client.post(f"/api/threads/{thread_id}/runs/{run_id}/cancel")
     assert cancel_resp.status_code == 200
 
     # When: inject with mode=continue
@@ -61,18 +57,14 @@ async def test_interrupt_cancel_and_fork_continue_inherits_namespace(
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
-async def test_interrupt_preserves_checkpoint_context(
-    client: httpx.AsyncClient, thread_id: str
-):
+async def test_interrupt_preserves_checkpoint_context(client: httpx.AsyncClient, thread_id: str):
     """Continue mode: checkpoint history is preserved across fork."""
     # Given: create run to establish checkpoint with some context
     run_resp = await client.post(
         f"/api/threads/{thread_id}/runs",
         json={
             "assistant_id": "lead-agent",
-            "input": {
-                "messages": [{"role": "user", "content": "测试checkpoint保留"}]
-            },
+            "input": {"messages": [{"role": "user", "content": "测试checkpoint保留"}]},
         },
     )
     if run_resp.status_code != 200:

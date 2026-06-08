@@ -64,9 +64,7 @@ def test_inject_creates_new_revision():
     assert body["superseded_revision_id"] == "rev-1"
     assert body["status"] == "pending"
     assert body["checkpoint_namespace"] == "run:root-1:rev:rev-2"
-    registry.fork_revision.assert_awaited_once_with(
-        parent_revision_id="rev-1", reason="switch plan", mode="continue"
-    )
+    registry.fork_revision.assert_awaited_once_with(parent_revision_id="rev-1", reason="switch plan", mode="continue")
 
 
 def test_inject_returns_404_when_revision_missing():
@@ -131,6 +129,24 @@ def test_switch_active_run_maps_set_active_errors_to_conflict():
 
     assert response.status_code == 409
     assert "not active candidate" in response.json()["detail"]
+
+
+def test_inject_invalid_mode_returns_422():
+    """Invalid mode value is rejected by Pydantic schema validation."""
+    registry = MagicMock()
+    registry.fork_revision = AsyncMock()
+
+    app = _make_app(registry)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/runs/rev-1/inject",
+            json={"instruction": "test", "mode": "invalid"},
+        )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert "mode" in str(body["detail"]).lower()
+    registry.fork_revision.assert_not_awaited()
 
 
 def test_missing_registry_returns_503():

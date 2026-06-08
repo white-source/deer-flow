@@ -16,9 +16,7 @@ import pytest
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
-async def test_cancel_run_transitions_revision_to_cancelled(
-    client: httpx.AsyncClient, thread_id: str
-):
+async def test_cancel_run_transitions_revision_to_cancelled(client: httpx.AsyncClient, thread_id: str):
     """Cancel a run should transition its linked revision to cancelled."""
     # Given: create a run with revision context
     run_resp = await client.post(
@@ -34,9 +32,7 @@ async def test_cancel_run_transitions_revision_to_cancelled(
     run_id = run_body["run_id"]
 
     # When: cancel the run
-    cancel_resp = await client.post(
-        f"/api/threads/{thread_id}/runs/{run_id}/cancel"
-    )
+    cancel_resp = await client.post(f"/api/threads/{thread_id}/runs/{run_id}/cancel")
     assert cancel_resp.status_code == 200
 
     # Then: run status is interrupted
@@ -51,9 +47,7 @@ async def test_cancel_run_transitions_revision_to_cancelled(
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
-async def test_cancel_idempotent_returns_success(
-    client: httpx.AsyncClient, thread_id: str
-):
+async def test_cancel_idempotent_returns_success(client: httpx.AsyncClient, thread_id: str):
     """Second cancel on the same run returns success (idempotent)."""
     run_resp = await client.post(
         f"/api/threads/{thread_id}/runs",
