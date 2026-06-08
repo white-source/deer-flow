@@ -43,9 +43,7 @@ async def test_forked_revision_inherits_parent_checkpoint_namespace(registry: Re
     root = await registry.create_root_run(thread_id="t1", created_by_message_id="m1")
     parent = await registry.create_initial_revision(root.root_run_id)
 
-    child = await registry.fork_revision(
-        parent_revision_id=parent.revision_id, reason="inject"
-    )
+    child = await registry.fork_revision(parent_revision_id=parent.revision_id, reason="inject")
 
     assert child.checkpoint_namespace == parent.checkpoint_namespace
     assert child.parent_revision_id == parent.revision_id

@@ -48,6 +48,9 @@ class _FakeRunManager:
     async def notify_run_terminal(self, *_args, **_kwargs) -> None:
         return None
 
+    def set_on_run_cancelled(self, *_args, **_kwargs) -> None:
+        return None
+
 
 class _FakeBridge:
     def __init__(self) -> None:

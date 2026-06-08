@@ -38,3 +38,21 @@ def test_transition_matrix(current: RevisionStatus, nxt: RevisionStatus, allowed
     else:
         with pytest.raises(ValueError):
             assert_transition_allowed(current, nxt)
+
+
+@pytest.mark.parametrize(
+    "current",
+    [
+        RevisionStatus.running,
+        RevisionStatus.paused,
+        RevisionStatus.awaiting_action,
+    ],
+)
+def test_non_terminal_to_cancelled_allowed(current: RevisionStatus):
+    """User-initiated cancel should be allowed from running/paused/awaiting_action."""
+    assert_transition_allowed(current, RevisionStatus.cancelled)
+
+
+def test_pending_to_cancelled_allowed():
+    """Cancel before first run starts should be allowed."""
+    assert_transition_allowed(RevisionStatus.pending, RevisionStatus.cancelled)

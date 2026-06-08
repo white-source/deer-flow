@@ -181,6 +181,30 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
             launch=services.launch_run_task,
         )
         await app.state.run_dispatcher.start()
+        # Wire run cancellation → revision state transition for the
+        # revision runtime feature flag.
+        revision_registry = getattr(app.state, "revision_registry", None)
+        if revision_registry is not None:
+
+            async def _on_run_cancelled(thread_id: str, run_id: str) -> None:
+                record = await app.state.run_manager.get(run_id)
+                if record is None:
+                    return
+                revision_id = (record.metadata or {}).get("revision_id")
+                if not revision_id:
+                    return
+                try:
+                    await revision_registry.transition_revision(revision_id, "cancelled")
+                except ValueError:
+                    logger.warning(
+                        "Failed to transition revision %s to cancelled (run %s cancelled on thread %s)",
+                        revision_id,
+                        run_id,
+                        thread_id,
+                        exc_info=True,
+                    )
+
+            app.state.run_dispatcher.set_on_run_cancelled(_on_run_cancelled)
         if getattr(config.database, "backend", None) == "sqlite":
             from deerflow.utils.time import now_iso
 

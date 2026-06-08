@@ -124,6 +124,7 @@ class RunManager:
         self._queue = queue
         self._persistence_retry_policy = persistence_retry_policy or PersistenceRetryPolicy()
         self._run_terminal_handler: Callable[[str, str], Awaitable[None]] | None = None
+        self._on_run_cancelled: Callable[[str, str], Awaitable[None]] | None = None
 
     def set_run_terminal_handler(
         self,
@@ -132,9 +133,22 @@ class RunManager:
         """Register a callback invoked after a run reaches a terminal state."""
         self._run_terminal_handler = handler
 
+    def set_on_run_cancelled(
+        self,
+        handler: Callable[[str, str], Awaitable[None]] | None,
+    ) -> None:
+        """Register a callback invoked after a run is cancelled."""
+        self._on_run_cancelled = handler
+
     async def notify_run_terminal(self, thread_id: str, run_id: str) -> None:
         """Invoke the registered terminal handler, if any."""
         handler = self._run_terminal_handler
+        if handler is not None:
+            await handler(thread_id, run_id)
+
+    async def _notify_run_cancelled(self, thread_id: str, run_id: str) -> None:
+        """Invoke the registered cancel handler, if any."""
+        handler = self._on_run_cancelled
         if handler is not None:
             await handler(thread_id, run_id)
 
@@ -510,6 +524,7 @@ class RunManager:
                 record.updated_at = _now_iso()
                 await self._persist_status(record, RunStatus.interrupted)
                 logger.info("Run %s cancelled while queued", run_id)
+                await self._notify_run_cancelled(record.thread_id, run_id)
                 return True
             if record.status not in (RunStatus.pending, RunStatus.running):
                 return False
@@ -521,6 +536,7 @@ class RunManager:
             record.updated_at = _now_iso()
         await self._persist_status(record, RunStatus.interrupted)
         logger.info("Run %s cancelled (action=%s)", run_id, action)
+        await self._notify_run_cancelled(record.thread_id, run_id)
         return True
 
     async def create_or_reject(

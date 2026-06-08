@@ -68,6 +68,7 @@ class RunDispatcher:
     _thread_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
     _semaphore: asyncio.Semaphore | None = field(default=None, init=False)
     _started: bool = field(default=False, init=False)
+    _on_run_cancelled_external: Callable[[str, str], Awaitable[None]] | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         self._semaphore = asyncio.Semaphore(max(1, self.workers))
@@ -75,12 +76,26 @@ class RunDispatcher:
     async def start(self) -> None:
         """Register the terminal handler so completed runs drain the queue."""
         self.run_manager.set_run_terminal_handler(self.on_run_finished)
+        self.run_manager.set_on_run_cancelled(self._on_run_cancelled_bridge)
         self._started = True
 
     async def stop(self) -> None:
         """Clear the terminal handler on shutdown."""
         self.run_manager.set_run_terminal_handler(None)
+        self.run_manager.set_on_run_cancelled(None)
         self._started = False
+
+    def set_on_run_cancelled(
+        self,
+        handler: Callable[[str, str], Awaitable[None]] | None,
+    ) -> None:
+        """Register a handler invoked when a run is cancelled."""
+        self._on_run_cancelled_external = handler
+
+    async def _on_run_cancelled_bridge(self, thread_id: str, run_id: str) -> None:
+        """Bridge: forward RunManager cancel events to the external handler."""
+        if self._on_run_cancelled_external is not None:
+            await self._on_run_cancelled_external(thread_id, run_id)
 
     def _thread_lock(self, thread_id: str) -> asyncio.Lock:
         lock = self._thread_locks.get(thread_id)
