@@ -88,57 +88,93 @@ async def initial_revision(client: httpx.AsyncClient, thread_id: str, root_run_i
     """Create an initial revision, return revision record."""
 ```
 
-### 3.2 test_scenario_2_inject.py — 情况2：修改参数
+### 3.2 test_scenario_2_inject.py — 情况2：修改参数（mode=replace）
 
-#### 用例 1: `test_inject_creates_child_with_inherited_checkpoint_namespace`
+#### 用例 1: `test_inject_replace_creates_child_with_independent_namespace`
 
 ```
 Given:  已创建 root_run + initial_revision (revision_id="rev-a")
          父 revision 的 checkpoint_namespace = "run:{root}:rev:rev-a"
-When:   POST /api/runs/rev-a/inject  {instruction: "不看上个月，改成本月"}
+When:   POST /api/runs/rev-a/inject
+        {instruction: "不看上个月，查这个月", mode: "replace"}
 Then:   HTTP 200
         返回的 superseded_revision_id == "rev-a"
-        子 revision checkpoint_namespace == 父 revision checkpoint_namespace
+        子 revision checkpoint_namespace != 父 revision checkpoint_namespace（独立 ns）
         子 revision parent_revision_id == "rev-a"
         子 revision status == "pending"
 ```
 
 ```python
 @pytest.mark.asyncio
-async def test_inject_creates_child_with_inherited_checkpoint_namespace(
+async def test_inject_replace_creates_child_with_independent_namespace(
     client: httpx.AsyncClient, initial_revision: dict
 ):
     parent_id = initial_revision["revision_id"]
+    parent_ns = initial_revision["checkpoint_namespace"]
 
     response = await client.post(
         f"/api/runs/{parent_id}/inject",
-        json={"instruction": "不看上个月，改成本月"},
+        json={"instruction": "不看上个月，查这个月", "mode": "replace"},
     )
     assert response.status_code == 200
     body = response.json()
     child_id = body["revision_id"]
 
-    # Verify child inherits parent's checkpoint_namespace
-    parent_ns = initial_revision["checkpoint_namespace"]
+    # Verify child has INDEPENDENT namespace (not parent's)
     # Child is now the active revision
-    active_response = await client.get(f"/api/threads/{initial_revision['thread_id']}/active-run")
-    active = active_response.json()
-    assert active["active_revision_id"] == child_id
-    assert active["checkpoint_namespace"] == parent_ns
+    assert body["checkpoint_namespace"] != parent_ns
+    assert body["superseded_revision_id"] == parent_id
+    assert body["status"] == "pending"
+```
+
+#### 用例 2: `test_inject_continue_inherits_checkpoint_namespace`
+
+```
+Given:  root_run + initial_revision (checkpoint_ns="run:{root}:rev:rev-a")
+When:   POST /api/runs/rev-a/inject
+        {instruction: "我没订过，重点查凭证", mode: "continue"}
+Then:   子 revision checkpoint_namespace == 父 revision checkpoint_namespace
+        子 revision parent_revision_id == "rev-a"
+```
+
+```python
+@pytest.mark.asyncio
+async def test_inject_continue_inherits_checkpoint_namespace(
+    client: httpx.AsyncClient, initial_revision: dict
+):
+    parent_id = initial_revision["revision_id"]
+    parent_ns = initial_revision["checkpoint_namespace"]
+
+    response = await client.post(
+        f"/api/runs/{parent_id}/inject",
+        json={"instruction": "我没订过，重点查凭证", "mode": "continue"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["checkpoint_namespace"] == parent_ns
     assert body["superseded_revision_id"] == parent_id
 ```
 
-#### 用例 2: `test_inject_supersedes_parent_revision`
+#### 用例 3: `test_inject_default_mode_is_continue`
 
 ```
-Given:  root_run + initial_revision (status="running", 可被 supersede)
-When:   POST /api/runs/{rev}/inject
+Given:  root_run + initial_revision
+When:   POST /api/runs/rev-a/inject {instruction: "..."}（不传 mode）
+Then:   子 revision 继承父 checkpoint_namespace（默认 continue）
+```
+
+#### 用例 4: `test_inject_supersedes_parent_revision`
+
+```
+Given:  root_run + initial_revision (status="running")
+When:   POST /api/runs/{rev}/inject（任意 mode）
 Then:   父 revision status == "superseded"
         子 revision status == "pending"
         子 revision supersedes_revision_id == 父 revision_id
 ```
 
-#### 用例 3: `test_superseded_revision_cannot_be_resumed`
+#### 用例 5: `test_superseded_revision_cannot_be_resumed`
 
 ```
 Given:  revision 已被 fork_revision() supersede
@@ -147,7 +183,7 @@ Then:   HTTP 409 (Conflict)
         body.detail 包含 "superseded -> running is not allowed"
 ```
 
-#### 用例 4: `test_inject_on_unknown_revision_returns_404`
+#### 用例 6: `test_inject_on_unknown_revision_returns_404`
 
 ```
 Given:  不存在的 revision_id = "rev_nonexistent"
@@ -229,15 +265,16 @@ Then:   run 正常 cancelled
         不报错（handler 中找不到 revision_id 时静默跳过）
 ```
 
-### 3.4 test_scenario_4_interrupt.py — 情况4：垫词后打断
+### 3.4 test_scenario_4_interrupt.py — 情况4：垫词后打断（mode=continue）
 
-#### 用例 1: `test_interrupt_cancels_current_and_forks_new`
+#### 用例 1: `test_interrupt_cancels_current_and_forks_new_continue`
 
 ```
 Given:  root_run + revision (status="running") + inflight run
         用户的 checkpoint 中有历史消息 {msg1, tool_call, result}
 When:   1. POST /api/threads/{tid}/runs/{rid}/cancel
-        2. POST /api/runs/{rev}/inject {instruction: "我没订过啊，重点查凭证"}
+        2. POST /api/runs/{rev}/inject
+           {instruction: "我没订过啊，重点查凭证", mode: "continue"}
 Then:   原 revision → superseded
         子 revision → pending
         子 revision checkpoint_ns == 原 revision checkpoint_ns
@@ -245,7 +282,7 @@ Then:   原 revision → superseded
 
 ```python
 @pytest.mark.asyncio
-async def test_interrupt_cancels_current_and_forks_new(
+async def test_interrupt_cancels_current_and_forks_new_continue(
     client: httpx.AsyncClient, thread_id: str, initial_revision: dict
 ):
     rev_id = initial_revision["revision_id"]
@@ -266,24 +303,24 @@ async def test_interrupt_cancels_current_and_forks_new(
     run_id = run_response.json()["run_id"]
     await client.post(f"/api/threads/{thread_id}/runs/{run_id}/cancel")
 
-    # Fork a new revision (simulating Talker injecting "我没订过啊")
+    # Fork with continue mode (补充信息，保留已有查询上下文)
     inject_response = await client.post(
         f"/api/runs/{rev_id}/inject",
-        json={"instruction": "我没订过啊，重点查凭证"},
+        json={"instruction": "我没订过啊，重点查凭证", "mode": "continue"},
     )
     assert inject_response.status_code == 200
     child = inject_response.json()
 
-    # Verify checkpoint inheritance
+    # Verify checkpoint inheritance for continue mode
     assert child["superseded_revision_id"] == rev_id
-    assert initial_revision["checkpoint_namespace"] == parent_ns
+    assert child["checkpoint_namespace"] == parent_ns
 ```
 
 #### 用例 2: `test_interrupt_preserves_checkpoint_context`
 
 ```
 Given:  revision checkpoint 中有历史消息
-When:   cancel + inject fork 新 revision（继承同一 checkpoint_namespace）
+When:   cancel + inject fork 新 revision（mode="continue"，继承同一 checkpoint_namespace）
 Then:   checkpoint 中仍能读到历史消息（通过 aget_tuple 验证）
 ```
 

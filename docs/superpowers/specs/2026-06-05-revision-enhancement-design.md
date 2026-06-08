@@ -17,34 +17,102 @@
 
 ## 2. 核心变更
 
-### 2.1 Checkpoint 继承 —— inject 增强
+### 2.1 Inject Mode —— replace vs continue
 
-**旧行为**：`fork_revision()` 为 child 生成独立 checkpoint namespace (`run:{root}:rev:{child_id}`)，child 从空 checkpoint 开始执行。
+**问题**：单一的"始终继承 checkpoint"策略无法同时满足两个场景：
+- 情况4（补充信息）：需要继承已有上下文 → `"我没订过啊"` 需要知道前面查到了什么
+- 情况2（修改参数）：需要丢弃旧结果 → `"不看8月查9月"` 不能让 graph 看到 8 月的结果
 
-**新行为**：child 直接继承 parent 的 `checkpoint_namespace`，child 的 run 从 parent 的 checkpoint 继续追加。
+**方案**：inject API 新增 `mode` 参数，由 Talker（LLM）在调 inject 之前选择。
+
+#### mode="continue"（继承 — 默认）
+
+child 继承 parent 的 `checkpoint_namespace`，graph 延续已有上下文执行。
 
 ```
 inject 前:
   Rev-A (active), checkpoint_ns = "run:root1:rev:rev-a"
-  checkpoint: {msg1, msg2, tool_call, result}
+  checkpoint: {msg1, tool_call, result: "8元=增值业务"}
 
-inject 后:
-  Rev-A (superseded), checkpoint_ns = "run:root1:rev:rev-a"  ← 元数据保留
-  Rev-B (active),    checkpoint_ns = "run:root1:rev:rev-a"  ← 继承，同一个 ns
-  checkpoint: {msg1, msg2, tool_call, result, msg3(new), ...}
+inject 后 (mode=continue):
+  Rev-A (superseded)
+  Rev-B (active), checkpoint_ns = "run:root1:rev:rev-a"  ← 继承
+  checkpoint: {msg1, tool_call, result, msg2: "没订过，查凭证", ...}
 ```
 
-**代码变更** (`registry.py` `fork_revision()` 方法)：
+适用场景：情况4 补充信息、追问、质疑已有结果。
+
+#### mode="replace"（替换）
+
+child 使用独立的新 `checkpoint_namespace`，graph 从空开始执行，Talker 的 instruction 是唯一输入。
+
+```
+inject 前:
+  Rev-A (active), checkpoint_ns = "run:root1:rev:rev-a"
+  checkpoint: {msg1, tool_call(query 8月), result: "38元"}
+
+inject 后 (mode=replace):
+  Rev-A (superseded)
+  Rev-B (active), checkpoint_ns = "run:root1:rev:rev-b"  ← 独立，新 ns
+  checkpoint: {}  ← 空，从 Talker 的 instruction 开始
+```
+
+适用场景：情况2 修改参数、情况5 合并任务。
+
+#### API 变更
 
 ```python
-# 旧: 新建独立 namespace
-checkpoint_namespace=self._checkpoint_namespace(parent.root_run_id, revision_id)
+# POST /api/runs/{rev}/inject
 
-# 新: 继承 parent 的 namespace
-checkpoint_namespace=parent.checkpoint_namespace
+class InjectRequest(BaseModel):
+    instruction: str = Field(min_length=1)
+    mode: str = "continue"  # "replace" | "continue"
 ```
 
-**影响**：Worker 的 `_resolve_checkpoint_namespace` 无需修改——它本来就是从 config 读 namespace，不管 namespace 是新建的还是继承的。
+#### 代码变更 (`registry.py` `fork_revision()`)：
+
+```python
+async def fork_revision(
+    self, *, parent_revision_id: str, reason: str, mode: str = "continue"
+) -> RevisionRecord:
+    # ...
+    if mode == "replace":
+        checkpoint_namespace = self._checkpoint_namespace(parent.root_run_id, revision_id)
+    else:
+        checkpoint_namespace = parent.checkpoint_namespace
+    # ...
+```
+
+#### Talker 如何选择 mode（方式 A：LLM 一步判断）
+
+Talker 的 LLM prompt 同时输出 intent + mode + instruction：
+
+```
+判断用户意图，输出 JSON:
+{
+  "intent": "inject" | "cancel" | "new" | "quick_reply",
+  "mode": "replace" | "continue",
+  "instruction": "改写后的任务描述"
+}
+
+mode 判断规则:
+- replace: 用户改变了原任务的参数/目标（改月份、换查询对象、合并多个子任务）
+- continue: 用户在已有结果基础上追问、补充、质疑
+
+示例:
+原任务: "查询8月话费"    用户: "不看8月查9月" → mode=replace, instruction="查询9月话费"
+原任务: "查8元扣费来源"  用户: "我没订过啊"   → mode=continue, instruction="重点查订购凭证"
+原任务: "话费"+"流量"    用户: "增值也查"     → mode=replace, instruction="查话费变高原因+流量+增值"
+```
+
+#### 各场景 mode 映射
+
+| 场景 | mode | namespace | 行为 |
+|---|---|---|---|
+| 情况2 修改参数 | `replace` | 独立 | graph 从空开始，只查9月 |
+| 情况3 停止任务 | N/A（只用 cancel） | — | — |
+| 情况4 补充信息 | `continue` | 继承 | graph 有上下文，聚焦查凭证 |
+| 情况5 合并任务 | `replace` | 独立 | Talker 合并 prompt 后注入，从空开始 |
 
 ### 2.2 Cancel 联动 Revision 状态机 —— cancel 增强
 
