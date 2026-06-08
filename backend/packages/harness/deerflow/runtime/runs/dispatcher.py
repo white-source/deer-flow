@@ -123,18 +123,17 @@ class RunDispatcher:
             if record.thread_id in self._active_threads:
                 # When the previous run was cancelled via create_or_reject
                 # (interrupt/rollback), its worker hasn't finished cleanup
-                # yet. Enqueue the new run so _drain_thread picks it up
-                # when the old worker completes, instead of rejecting it.
+                # yet but is already unwinding. Force-clear the stale active
+                # flag and dispatch the new run immediately.
                 if record.multitask_strategy in ("interrupt", "rollback"):
-                    await self.queue.enqueue(record.thread_id, record.run_id)
-                    await self.run_manager.set_status(record.run_id, RunStatus.queued)
+                    self._active_threads.discard(record.thread_id)
+                else:
+                    logger.warning(
+                        "Thread %s already has an active run; run %s was not started",
+                        record.thread_id,
+                        record.run_id,
+                    )
                     return
-                logger.warning(
-                    "Thread %s already has an active run; run %s was not started",
-                    record.thread_id,
-                    record.run_id,
-                )
-                return
             self._active_threads.add(record.thread_id)
 
         asyncio.create_task(self._execute(record))
@@ -174,7 +173,8 @@ class RunDispatcher:
             next_run_id = await self.queue.dequeue(thread_id)
             if next_run_id is None:
                 async with self._thread_lock(thread_id):
-                    self._active_threads.discard(thread_id)
+                    if not await self.run_manager.has_inflight(thread_id):
+                        self._active_threads.discard(thread_id)
                 return
 
             record = await self.run_manager.get(next_run_id)
