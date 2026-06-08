@@ -755,24 +755,14 @@ export function useThreadStream({
         } else if (activeRevisionId && intent === "resume") {
           await resumeRevision(activeRevisionId);
           setOptimisticMessages([]);
-        } else if (thread.isLoading) {
-          // Bypass the SDK's internal promise chain (StreamManager.start()
-          // serialises all submits behind the active stream). Send the
-          // interrupt request directly so the backend cancels the running
-          // run and starts the new one immediately.
-          await fetch(
-            `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/runs/stream`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                ...runPayload,
-                multitask_strategy: "interrupt",
-              }),
-              credentials: "include",
-            },
-          );
         } else {
+          if (thread.isLoading) {
+            // Stop the active stream so the SDK's internal promise chain
+            // is cleared. thread.stop() is immediate (not serialised).
+            // The backend interrupt via multitaskStrategy will cancel the
+            // running run; the SDK will stream the new run normally.
+            void thread.stop();
+          }
           await thread.submit(
             {
               messages: runPayload.input.messages,
