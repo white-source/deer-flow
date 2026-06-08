@@ -121,6 +121,14 @@ class RunDispatcher:
 
         async with self._thread_lock(record.thread_id):
             if record.thread_id in self._active_threads:
+                # When the previous run was cancelled via create_or_reject
+                # (interrupt/rollback), its worker hasn't finished cleanup
+                # yet. Enqueue the new run so _drain_thread picks it up
+                # when the old worker completes, instead of rejecting it.
+                if record.multitask_strategy in ("interrupt", "rollback"):
+                    await self.queue.enqueue(record.thread_id, record.run_id)
+                    await self.run_manager.set_status(record.run_id, RunStatus.queued)
+                    return
                 logger.warning(
                     "Thread %s already has an active run; run %s was not started",
                     record.thread_id,
