@@ -524,19 +524,21 @@ class RunManager:
                 record.updated_at = _now_iso()
                 await self._persist_status(record, RunStatus.interrupted)
                 logger.info("Run %s cancelled while queued", run_id)
-                await self._notify_run_cancelled(record.thread_id, run_id)
-                return True
-            if record.status not in (RunStatus.pending, RunStatus.running):
+            elif record.status not in (RunStatus.pending, RunStatus.running):
                 return False
-            record.abort_action = action
-            record.abort_event.set()
-            if record.task is not None and not record.task.done():
-                record.task.cancel()
-            record.status = RunStatus.interrupted
-            record.updated_at = _now_iso()
-        await self._persist_status(record, RunStatus.interrupted)
-        logger.info("Run %s cancelled (action=%s)", run_id, action)
-        await self._notify_run_cancelled(record.thread_id, run_id)
+            else:
+                record.abort_action = action
+                record.abort_event.set()
+                if record.task is not None and not record.task.done():
+                    record.task.cancel()
+                record.status = RunStatus.interrupted
+                record.updated_at = _now_iso()
+        # Persist (pending/running path) and notify outside the lock
+        # so handlers can safely call back into RunManager.get().
+        if record.status == RunStatus.interrupted:
+            await self._persist_status(record, RunStatus.interrupted)
+            logger.info("Run %s cancelled (action=%s)", run_id, action)
+            await self._notify_run_cancelled(record.thread_id, run_id)
         return True
 
     async def create_or_reject(
